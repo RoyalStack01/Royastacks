@@ -15,8 +15,10 @@ const mimeTypes = {
 };
 
 const server = http.createServer((req, res) => {
-  let filePath = req.url === '/' ? '/index.html' : req.url;
-  filePath = path.join(__dirname, 'public', filePath);
+  const url = req.url === '/' ? '/index.html' : req.url;
+  const filePath = url === '/index.html'
+    ? path.join(__dirname, 'index.html')
+    : path.join(__dirname, 'public', url);
 
   const ext = path.extname(filePath);
   const contentType = mimeTypes[ext] || 'text/plain';

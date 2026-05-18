@@ -168,6 +168,7 @@ header {
   font-family: 'Playfair Display', serif;
   font-size: clamp(12px,2vw,19px); font-weight: 900;
   background: linear-gradient(135deg, #fff 30%, var(--pink-bright));
+  background-clip: text;
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   white-space: nowrap;
 }
@@ -699,11 +700,11 @@ header {
 <div class="tray">
   <div class="widget-strip">
 
-    <div class="w" onclick="claimBonus()">
+    <div class="w">
       <div class="w-label">Daily Bonus</div>
       <div class="w-icon">🎁</div>
       <div class="w-info" id="bonusTimer">23h 59m</div>
-      <button class="w-cta pink">CLAIM</button>
+      <button type="button" class="w-cta pink" onclick="claimBonus()">CLAIM</button>
     </div>
 
     <div class="w w-missions">
@@ -783,15 +784,22 @@ const dotEls = document.querySelectorAll('.dot');
 
 function getState(i){ return (i-cur+N)%N; }
 function applyPos(){
-  cards.forEach((c,i)=>{ c.className='c-card'; c.classList.add('state-'+getState(i)); });
+  cards.forEach((c,i)=>{
+    c.classList.remove('state-0','state-1','state-2','state-3');
+    c.classList.add('state-'+getState(i));
+  });
   dotEls.forEach((d,i)=>d.classList.toggle('active',i===cur));
 }
-function rotate(dir){ if(busy)return; busy=true; cur=(cur-dir+N)%N; applyPos(); setTimeout(()=>busy=false,580); }
+function rotate(dir){ if(busy)return; busy=true; cur=(cur+dir+N)%N; applyPos(); setTimeout(()=>busy=false,580); }
 function goTo(i){ if(busy||i===cur)return; busy=true; cur=i; applyPos(); setTimeout(()=>busy=false,580); }
 function handleClick(i){ if(i!==cur) goTo(i); }
 applyPos();
 
-document.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft')rotate(-1); if(e.key==='ArrowRight')rotate(1); });
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft') rotate(-1);
+  if(e.key==='ArrowRight') rotate(1);
+  if(e.key==='Escape') closeModal();
+});
 let tx=0;
 document.addEventListener('touchstart',e=>{ tx=e.touches[0].clientX; },{passive:true});
 document.addEventListener('touchend',e=>{ const dx=e.changedTouches[0].clientX-tx; if(Math.abs(dx)>40) rotate(dx>0?-1:1); });
