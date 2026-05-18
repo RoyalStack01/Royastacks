@@ -1,0 +1,1530 @@
+"use client";
+
+import { useState, useEffect } from "react";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+type Suit = "spades" | "hearts" | "diamonds" | "clubs";
+type CardFace = { rank: string; suit: Suit };
+type Player = {
+  id: number;
+  name: string;
+  chips: number;
+  cards: [CardFace | null, CardFace | null];
+  bet: number;
+  isActive: boolean;
+  isDealer: boolean;
+  isFolded: boolean;
+  position: { x: number; y: number; anchor: string };
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const CRIMSON = "#E8003A";
+const WHITE = "#FFFFFF";
+const BLACK = "#0A0A0A";
+
+const DEFAULT_PLAYERS: Player[] = [
+  {
+    id: 1,
+    name: "Phoenix",
+    chips: 4200,
+    cards: [
+      { rank: "A", suit: "spades" },
+      { rank: "K", suit: "hearts" },
+    ],
+    bet: 0,
+    isActive: true,
+    isDealer: false,
+    isFolded: false,
+    position: { x: 50, y: 88, anchor: "center" },
+  },
+  {
+    id: 2,
+    name: "Maverick",
+    chips: 7800,
+    cards: [
+      { rank: "10", suit: "clubs" },
+      { rank: "J", suit: "diamonds" },
+    ],
+    bet: 0,
+    isActive: true,
+    isDealer: false,
+    isFolded: false,
+    position: { x: 78, y: 62, anchor: "right" },
+  },
+  {
+    id: 3,
+    name: "Blaze",
+    chips: 3100,
+    cards: [
+      { rank: "Q", suit: "hearts" },
+      { rank: "8", suit: "spades" },
+    ],
+    bet: 0,
+    isActive: true,
+    isDealer: true,
+    isFolded: false,
+    position: { x: 50, y: 12, anchor: "center" },
+  },
+  {
+    id: 4,
+    name: "Viper",
+    chips: 9500,
+    cards: [
+      { rank: "7", suit: "diamonds" },
+      { rank: "9", suit: "clubs" },
+    ],
+    bet: 0,
+    isActive: true,
+    isDealer: false,
+    isFolded: false,
+    position: { x: 88, y: 38, anchor: "right" },
+  },
+  {
+    id: 5,
+    name: "Storm",
+    chips: 5600,
+    cards: [
+      { rank: "2", suit: "hearts" },
+      { rank: "3", suit: "diamonds" },
+    ],
+    bet: 0,
+    isActive: true,
+    isDealer: false,
+    isFolded: false,
+    position: { x: 12, y: 38, anchor: "left" },
+  },
+];
+
+const DEFAULT_COMMUNITY_CARDS: CardFace[] = [
+  { rank: "10", suit: "hearts" },
+  { rank: "J", suit: "spades" },
+  { rank: "Q", suit: "diamonds" },
+  { rank: "K", suit: "clubs" },
+  { rank: "A", suit: "hearts" },
+];
+
+const RANKS = [
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "J",
+  "Q",
+  "K",
+  "A",
+] as const;
+const SUITS: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
+const BLINDS = { small: 10, big: 20 };
+const HUMAN_PLAYER_ID = 1;
+
+type GamePhase =
+  | "preflop"
+  | "flop"
+  | "turn"
+  | "river"
+  | "showdown"
+  | "roundEnd";
+
+type HandCategory = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type HandRank = [HandCategory, ...number[]];
+
+const RANK_VALUE: Record<string, number> = {
+  2: 2,
+  3: 3,
+  4: 4,
+  5: 5,
+  6: 6,
+  7: 7,
+  8: 8,
+  9: 9,
+  10: 10,
+  J: 11,
+  Q: 12,
+  K: 13,
+  A: 14,
+};
+
+function createDeck(): CardFace[] {
+  return SUITS.flatMap((suit) => RANKS.map((rank) => ({ rank, suit })));
+}
+
+function shuffleCards<T>(cards: T[]): T[] {
+  const shuffled = [...cards];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function getNextActivePlayer(
+  players: Player[],
+  currentId: number,
+): number | null {
+  const currentIndex = players.findIndex((player) => player.id === currentId);
+  if (currentIndex === -1) return null;
+
+  for (let offset = 1; offset < players.length; offset += 1) {
+    const next = players[(currentIndex + offset) % players.length];
+    if (!next.isFolded && next.chips > 0) return next.id;
+  }
+
+  return null;
+}
+
+function getActivePlayers(players: Player[]) {
+  return players.filter((player) => !player.isFolded && player.chips > 0);
+}
+
+function resetPlayerBets(players: Player[]) {
+  return players.map((player) => ({ ...player, bet: 0 }));
+}
+
+function hasAllActivePlayersMatched(players: Player[], currentBet: number) {
+  return getActivePlayers(players).every(
+    (player) => player.bet === currentBet || player.chips === 0,
+  );
+}
+
+function formatMoney(value: number) {
+  return `$${value.toLocaleString()}`;
+}
+
+function getCombinations<T>(items: T[], size: number): T[][] {
+  const results: T[][] = [];
+
+  function helper(start: number, chosen: T[]) {
+    if (chosen.length === size) {
+      results.push(chosen);
+      return;
+    }
+    for (let i = start; i < items.length; i += 1) {
+      helper(i + 1, [...chosen, items[i]]);
+    }
+  }
+
+  helper(0, []);
+  return results;
+}
+
+function getStraightHigh(sortedUnique: number[]): number {
+  const ranks = [...sortedUnique];
+  if (ranks[0] === 14) ranks.push(1);
+
+  for (let i = 0; i <= ranks.length - 5; i += 1) {
+    let current = ranks[i];
+    let count = 1;
+
+    for (let j = i + 1; j < ranks.length && count < 5; j += 1) {
+      if (ranks[j] === current - 1) {
+        current = ranks[j];
+        count += 1;
+      } else if (ranks[j] === current) {
+        continue;
+      } else {
+        break;
+      }
+    }
+
+    if (count === 5) return ranks[i];
+  }
+
+  return 0;
+}
+
+function compareHandRank(a: HandRank, b: HandRank) {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const aValue = a[i] ?? 0;
+    const bValue = b[i] ?? 0;
+    if (aValue !== bValue) return aValue - bValue;
+  }
+  return 0;
+}
+
+function evaluate5CardHand(cards: CardFace[]): HandRank {
+  const ranks = cards.map((card) => RANK_VALUE[card.rank]);
+  const suits = cards.map((card) => card.suit);
+  const flush = suits.every((suit) => suit === suits[0]);
+
+  const counts = new Map<number, number>();
+  ranks.forEach((rank) => counts.set(rank, (counts.get(rank) ?? 0) + 1));
+
+  const uniqueRanks = Array.from(new Set(ranks)).sort((a, b) => b - a);
+  const straightHigh = getStraightHigh(uniqueRanks);
+  const straight = straightHigh > 0;
+
+  const sortedEntries = Array.from(counts.entries()).sort((a, b) => {
+    if (a[1] !== b[1]) return b[1] - a[1];
+    return b[0] - a[0];
+  });
+
+  const [firstRank, firstCount] = sortedEntries[0];
+  const [secondRank, secondCount] = sortedEntries[1] ?? [0, 0];
+  const [thirdRank] = sortedEntries[2] ?? [0, 0];
+  const sortedRanksDesc = ranks.slice().sort((a, b) => b - a);
+
+  if (straight && flush) {
+    return [8, straightHigh];
+  }
+
+  if (firstCount === 4) {
+    const kicker = sortedRanksDesc.find((rank) => rank !== firstRank) ?? 0;
+    return [7, firstRank, kicker];
+  }
+
+  if (firstCount === 3 && secondCount === 2) {
+    return [6, firstRank, secondRank];
+  }
+
+  if (flush) {
+    return [5, ...sortedRanksDesc];
+  }
+
+  if (straight) {
+    return [4, straightHigh];
+  }
+
+  if (firstCount === 3) {
+    const kickers = sortedRanksDesc
+      .filter((rank) => rank !== firstRank)
+      .slice(0, 2);
+    return [3, firstRank, ...kickers];
+  }
+
+  if (firstCount === 2 && secondCount === 2) {
+    const kicker =
+      sortedRanksDesc.find(
+        (rank) => rank !== firstRank && rank !== secondRank,
+      ) ?? 0;
+    return [2, firstRank, secondRank, kicker];
+  }
+
+  if (firstCount === 2) {
+    const kickers = sortedRanksDesc
+      .filter((rank) => rank !== firstRank)
+      .slice(0, 3);
+    return [1, firstRank, ...kickers];
+  }
+
+  return [0, ...sortedRanksDesc];
+}
+
+function evaluateBestHand(
+  holeCards: [CardFace, CardFace],
+  community: CardFace[],
+): HandRank {
+  const allCards = [holeCards[0], holeCards[1], ...community];
+  const combinations = getCombinations(allCards, 5);
+  let bestRank: HandRank | null = null;
+
+  for (const combo of combinations) {
+    const rank = evaluate5CardHand(combo);
+    if (!bestRank || compareHandRank(rank, bestRank) > 0) {
+      bestRank = rank;
+    }
+  }
+
+  return bestRank ?? [0, 0, 0, 0, 0, 0];
+}
+
+function determineWinners(players: Player[], community: CardFace[]): Player[] {
+  const active = getActivePlayers(players);
+  let bestRank: HandRank | null = null;
+  let winners: Player[] = [];
+
+  active.forEach((player) => {
+    if (!player.cards[0] || !player.cards[1]) return;
+    const rank = evaluateBestHand(
+      player.cards as [CardFace, CardFace],
+      community,
+    );
+    if (!bestRank || compareHandRank(rank, bestRank) > 0) {
+      bestRank = rank;
+      winners = [player];
+    } else if (compareHandRank(rank, bestRank) === 0) {
+      winners.push(player);
+    }
+  });
+
+  return winners;
+}
+
+// ─── SVG Suit Icons ───────────────────────────────────────────────────────────
+function SuitIcon({
+  suit,
+  size = 14,
+  color,
+}: {
+  suit: Suit;
+  size?: number;
+  color?: string;
+}) {
+  const fill =
+    color ?? (suit === "hearts" || suit === "diamonds" ? CRIMSON : WHITE);
+  switch (suit) {
+    case "spades":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 2 C12 2 3 9 3 14 C3 17.3 5.7 20 9 20 C9 20 8 22 6 22 L18 22 C16 22 15 20 15 20 C18.3 20 21 17.3 21 14 C21 9 12 2 12 2Z"
+            fill={fill}
+          />
+        </svg>
+      );
+    case "hearts":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 21 C12 21 3 14 3 8.5 C3 5.4 5.4 3 8.5 3 C10.2 3 11.7 3.8 12 4.7 C12.3 3.8 13.8 3 15.5 3 C18.6 3 21 5.4 21 8.5 C21 14 12 21 12 21Z"
+            fill={fill}
+          />
+        </svg>
+      );
+    case "diamonds":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path d="M12 2 L21 12 L12 22 L3 12 Z" fill={fill} />
+        </svg>
+      );
+    case "clubs":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <circle cx="8" cy="12" r="4" fill={fill} />
+          <circle cx="16" cy="12" r="4" fill={fill} />
+          <circle cx="12" cy="8" r="4" fill={fill} />
+          <path d="M10 16 L10 20 L14 20 L14 16 Z" fill={fill} />
+        </svg>
+      );
+  }
+}
+
+// ─── Card Back ────────────────────────────────────────────────────────────────
+function CardBack({
+  width = 38,
+  height = 54,
+}: {
+  width?: number;
+  height?: number;
+}) {
+  const id = `cb-${width}-${height}`;
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 38 54"
+      style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.7))" }}
+    >
+      <defs>
+        <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={BLACK} />
+          <stop offset="50%" stopColor="#1a0008" />
+          <stop offset="100%" stopColor={BLACK} />
+        </linearGradient>
+        <pattern
+          id={`${id}-pat`}
+          x="0"
+          y="0"
+          width="6"
+          height="6"
+          patternUnits="userSpaceOnUse"
+        >
+          <rect width="6" height="6" fill="transparent" />
+          <path d="M0 3 L3 0 L6 3 L3 6 Z" fill={CRIMSON} fillOpacity="0.35" />
+        </pattern>
+      </defs>
+      <rect rx="4" width="38" height="54" fill={`url(#${id}-bg)`} />
+      <rect rx="4" width="38" height="54" fill={`url(#${id}-pat)`} />
+      <rect
+        rx="4"
+        width="38"
+        height="54"
+        fill="none"
+        stroke={CRIMSON}
+        strokeWidth="1.5"
+        strokeOpacity="0.7"
+      />
+      <g transform="translate(19,27)" opacity="0.6">
+        <g transform="translate(-7,-7)">
+          <SuitIcon suit="spades" size={7} color={WHITE} />
+        </g>
+        <g transform="translate(1,-7)">
+          <SuitIcon suit="hearts" size={7} color={CRIMSON} />
+        </g>
+        <g transform="translate(-7,1)">
+          <SuitIcon suit="diamonds" size={7} color={CRIMSON} />
+        </g>
+        <g transform="translate(1,1)">
+          <SuitIcon suit="clubs" size={7} color={WHITE} />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+// ─── Card Front ───────────────────────────────────────────────────────────────
+function CardFront({
+  card,
+  width = 38,
+  height = 54,
+}: {
+  card: CardFace;
+  width?: number;
+  height?: number;
+}) {
+  const isRed = card.suit === "hearts" || card.suit === "diamonds";
+  const suitColor = isRed ? CRIMSON : BLACK;
+  const cornerRankSize = 10;
+  const cornerSuitSize = 9;
+  const centerSuitSize = 20;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 38 54"
+      style={{ filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.8))" }}
+    >
+      <rect rx="4" width="38" height="54" fill={WHITE} />
+      <rect
+        rx="4"
+        width="38"
+        height="54"
+        fill="none"
+        stroke="#ddd"
+        strokeWidth="0.5"
+      />
+
+      {/* top-left rank + suit */}
+      <text
+        x="3"
+        y="12"
+        fontSize={cornerRankSize}
+        fontWeight="700"
+        fontFamily="Georgia,serif"
+        fill={suitColor}
+      >
+        {card.rank}
+      </text>
+      <g transform="translate(3,13)">
+        <SuitIcon suit={card.suit} size={cornerSuitSize} color={suitColor} />
+      </g>
+
+      {/* center suit */}
+      <g transform={`translate(${38 / 2 - 9},${54 / 2 - 9})`}>
+        <SuitIcon suit={card.suit} size={centerSuitSize} color={suitColor} />
+      </g>
+
+      {/* bottom-right rank + suit (rotated) */}
+      <g transform="rotate(180,19,27)">
+        <text
+          x="3"
+          y="12"
+          fontSize={cornerRankSize}
+          fontWeight="700"
+          fontFamily="Georgia,serif"
+          fill={suitColor}
+        >
+          {card.rank}
+        </text>
+        <g transform="translate(3,13)">
+          <SuitIcon suit={card.suit} size={cornerSuitSize} color={suitColor} />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+// ─── Community Card ───────────────────────────────────────────────────────────
+function CommunityCard({
+  card,
+  revealed,
+}: {
+  card: CardFace;
+  revealed: boolean;
+}) {
+  return (
+    <div
+      style={{
+        transition: "transform 0.4s ease",
+        transform: revealed ? "rotateY(0deg)" : "rotateY(0deg)",
+      }}
+    >
+      {revealed ? (
+        <CardFront card={card} width={48} height={68} />
+      ) : (
+        <CardBack width={48} height={68} />
+      )}
+    </div>
+  );
+}
+
+// ─── Royal Stack Watermark ────────────────────────────────────────────────────
+function RoyalStackWatermark() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+        zIndex: 1,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          opacity: 0.12,
+          userSelect: "none",
+        }}
+      >
+        {/* Mini suits grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            marginBottom: 8,
+          }}
+        >
+          <SuitIcon suit="spades" size={39} color={WHITE} />
+          <SuitIcon suit="hearts" size={39} color={CRIMSON} />
+          <SuitIcon suit="diamonds" size={39} color={CRIMSON} />
+          <SuitIcon suit="clubs" size={39} color={WHITE} />
+        </div>
+        <div
+          style={{
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontSize: 63,
+            fontWeight: 800,
+            color: WHITE,
+            letterSpacing: 5,
+            lineHeight: 1.05,
+            textAlign: "center",
+          }}
+        >
+          ROYAL
+          <br />
+          STACK
+        </div>
+        <div
+          style={{
+            fontFamily: "Georgia, serif",
+            fontSize: 12,
+            color: CRIMSON,
+            letterSpacing: 4,
+            marginTop: 6,
+            opacity: 1,
+          }}
+        >
+          POWERED BY MEZO
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Player Seat ──────────────────────────────────────────────────────────────
+function PlayerSeat({
+  player,
+  isCurrentTurn,
+}: {
+  player: Player;
+  isCurrentTurn: boolean;
+}) {
+  const { anchor } = player.position;
+
+  const alignH = anchor.includes("left")
+    ? "flex-start"
+    : anchor.includes("right")
+      ? "flex-end"
+      : "center";
+
+  const isHuman = player.id === HUMAN_PLAYER_ID;
+
+  const cardRow = (
+    <div style={{ display: "flex", gap: 3, justifyContent: alignH }}>
+      {player.isFolded ? (
+        <span
+          style={{
+            fontSize: 9,
+            color: "#ff4466",
+            fontFamily: "Georgia,serif",
+            opacity: 0.7,
+          }}
+        >
+          FOLDED
+        </span>
+      ) : (
+        player.cards.map((c, i) =>
+          c ? (
+            <div
+              key={i}
+              style={{ transform: i === 0 ? "rotate(-3deg)" : "rotate(3deg)" }}
+            >
+              {isHuman ? (
+                <CardFront card={c} width={28} height={40} />
+              ) : (
+                <CardBack width={28} height={40} />
+              )}
+            </div>
+          ) : null,
+        )
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems:
+          alignH === "flex-start"
+            ? "flex-start"
+            : alignH === "flex-end"
+              ? "flex-end"
+              : "center",
+        gap: 4,
+        opacity: player.isFolded ? 0.45 : 1,
+        transition: "opacity 0.3s",
+      }}
+    >
+      {cardRow}
+      <div
+        style={{
+          background: isCurrentTurn
+            ? `linear-gradient(135deg, ${CRIMSON}, #9e0028)`
+            : "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
+          border: `1.5px solid ${isCurrentTurn ? CRIMSON : "rgba(255,255,255,0.18)"}`,
+          borderRadius: 10,
+          padding: "5px 10px",
+          backdropFilter: "blur(8px)",
+          boxShadow: isCurrentTurn
+            ? `0 0 18px ${CRIMSON}88, 0 2px 8px rgba(0,0,0,0.6)`
+            : "0 2px 8px rgba(0,0,0,0.5)",
+          minWidth: 90,
+          textAlign: "center",
+          transition: "all 0.3s",
+        }}
+      >
+        {player.isDealer && (
+          <div
+            style={{
+              fontSize: 8,
+              color: CRIMSON,
+              fontFamily: "Georgia,serif",
+              letterSpacing: 1,
+              marginBottom: 1,
+            }}
+          >
+            ♦ DEALER ♦
+          </div>
+        )}
+        <div
+          style={{
+            color: WHITE,
+            fontFamily: "Poppins, Georgia, 'Times New Roman', serif",
+            fontSize: 14,
+            fontWeight: 800,
+            letterSpacing: 0.6,
+          }}
+        >
+          {player.name}
+        </div>
+        <div
+          style={{
+            color: isCurrentTurn ? WHITE : "#ddd",
+            fontFamily: "monospace",
+            fontSize: 12,
+            marginTop: 2,
+          }}
+        >
+          ${player.chips.toLocaleString()}
+        </div>
+        {player.bet > 0 && (
+          <div
+            style={{
+              marginTop: 3,
+              fontSize: 9,
+              color: "#c70052",
+              fontFamily: "monospace",
+            }}
+          >
+            bet ${player.bet}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Chip Stack ───────────────────────────────────────────────────────────────
+function Pot({ amount }: { amount: number }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 3,
+      }}
+    >
+      {/* Chip icon */}
+      <svg width="32" height="32" viewBox="0 0 32 32">
+        <circle
+          cx="16"
+          cy="16"
+          r="14"
+          fill={CRIMSON}
+          stroke={WHITE}
+          strokeWidth="1.5"
+        />
+        <circle
+          cx="16"
+          cy="16"
+          r="10"
+          fill="transparent"
+          stroke={WHITE}
+          strokeWidth="1"
+          strokeDasharray="4 2"
+        />
+        <text
+          x="16"
+          y="20"
+          textAnchor="middle"
+          fontSize="8"
+          fill={WHITE}
+          fontFamily="Georgia,serif"
+          fontWeight="700"
+        >
+          POT
+        </text>
+      </svg>
+      <div
+        style={{
+          color: WHITE,
+          fontFamily: "Poppins, Georgia, serif",
+          fontSize: 15,
+          fontWeight: 900,
+          letterSpacing: 1,
+          textShadow: `0 0 10px ${CRIMSON}`,
+        }}
+      >
+        ${amount.toLocaleString()}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Table ───────────────────────────────────────────────────────────────
+export default function PokerTable() {
+  const [players, setPlayers] = useState<Player[]>(DEFAULT_PLAYERS);
+  const [dealerId, setDealerId] = useState<number>(
+    DEFAULT_PLAYERS.find((player) => player.isDealer)?.id ??
+      DEFAULT_PLAYERS[0].id,
+  );
+  const [currentTurn, setCurrentTurn] = useState<number | null>(null);
+  const [pot, setPot] = useState(0);
+  const [phase, setPhase] = useState<GamePhase>("roundEnd");
+  const [communityCards, setCommunityCards] = useState<CardFace[]>([]);
+  const [deck, setDeck] = useState<CardFace[]>([]);
+  const [currentBet, setCurrentBet] = useState(0);
+  const [phaseTurnStarter, setPhaseTurnStarter] = useState<number | null>(null);
+  const [actionLog, setActionLog] = useState<string[]>([
+    "Press DEAL to start a new hand.",
+  ]);
+
+  const currentPlayer = currentTurn
+    ? (players.find((player) => player.id === currentTurn) ?? null)
+    : null;
+
+  const callAmount = currentPlayer
+    ? Math.max(currentBet - currentPlayer.bet, 0)
+    : 0;
+
+  const isHumanTurn =
+    currentPlayer?.id === HUMAN_PLAYER_ID && phase !== "roundEnd";
+
+  const activePlayers = getActivePlayers(players);
+  const currentLabel =
+    phase === "roundEnd"
+      ? "Ready to deal a new hand"
+      : currentPlayer?.id === HUMAN_PLAYER_ID
+        ? "Your turn"
+        : `${currentPlayer?.name ?? "Waiting"} is acting...`;
+
+  const communityRevealed = communityCards.map((_, index) => {
+    if (phase === "preflop") return false;
+    if (phase === "flop") return index < 3;
+    if (phase === "turn") return index < 4;
+    return index < 5;
+  });
+
+  const addLog = (entry: string) => {
+    setActionLog((prev) => [...prev.slice(-4), entry]);
+  };
+
+  function dealNewHand() {
+    const freshDeck = shuffleCards(createDeck());
+    const nextDealer = getNextActivePlayer(players, dealerId) ?? dealerId;
+    const sbPlayerId = getNextActivePlayer(players, nextDealer) ?? nextDealer;
+    const bbPlayerId = getNextActivePlayer(players, sbPlayerId) ?? sbPlayerId;
+    const starterId = getNextActivePlayer(players, bbPlayerId) ?? bbPlayerId;
+
+    const resetPlayers = players.map((player) => ({
+      ...player,
+      isFolded: false,
+      bet: 0,
+      cards: [null, null],
+      isDealer: player.id === nextDealer,
+    }));
+
+    const deckCopy = [...freshDeck];
+    const dealtPlayers = resetPlayers.map((player) => {
+      const first = deckCopy.shift();
+      const second = deckCopy.shift();
+      return {
+        ...player,
+        cards: [
+          first ?? { rank: "2", suit: "clubs" },
+          second ?? { rank: "2", suit: "clubs" },
+        ],
+      };
+    });
+
+    const withBlinds = dealtPlayers.map((player) => {
+      if (player.id === sbPlayerId) {
+        const posted = Math.min(player.chips, BLINDS.small);
+        return { ...player, chips: player.chips - posted, bet: posted };
+      }
+      if (player.id === bbPlayerId) {
+        const posted = Math.min(player.chips, BLINDS.big);
+        return { ...player, chips: player.chips - posted, bet: posted };
+      }
+      return player;
+    });
+
+    const sbPlayer = withBlinds.find((player) => player.id === sbPlayerId);
+    const bbPlayer = withBlinds.find((player) => player.id === bbPlayerId);
+    const potAmount = (sbPlayer?.bet ?? 0) + (bbPlayer?.bet ?? 0);
+
+    setDealerId(nextDealer);
+    setPlayers(withBlinds);
+    setDeck(deckCopy);
+    setCommunityCards([]);
+    setPot(potAmount);
+    setCurrentBet(bbPlayer?.bet ?? 0);
+    setPhase("preflop");
+    setCurrentTurn(starterId);
+    setPhaseTurnStarter(starterId);
+    addLog(
+      `Dealt a new hand. ${sbPlayer?.name} posted SB ${formatMoney(sbPlayer?.bet ?? 0)}, ${bbPlayer?.name} posted BB ${formatMoney(bbPlayer?.bet ?? 0)}.`,
+    );
+  }
+
+  function completeRound(updatedPlayers: Player[], winners: Player[]) {
+    const share = Math.floor(pot / winners.length);
+    const remainder = pot - share * winners.length;
+    const updated = updatedPlayers.map((player, index) => {
+      if (winners.some((winner) => winner.id === player.id)) {
+        return {
+          ...player,
+          chips: player.chips + share + (index === 0 ? remainder : 0),
+        };
+      }
+      return player;
+    });
+
+    setPlayers(updated);
+    setPhase("roundEnd");
+    setCurrentTurn(null);
+    addLog(
+      winners.length === 1
+        ? `${winners[0].name} wins ${formatMoney(pot)}.`
+        : `${winners.map((winner) => winner.name).join(", ")} split ${formatMoney(pot)}.`,
+    );
+  }
+
+  function resolveHandEnd(updatedPlayers: Player[]): boolean {
+    const survivors = getActivePlayers(updatedPlayers);
+    if (survivors.length === 1) {
+      completeRound(updatedPlayers, survivors);
+      return true;
+    }
+    return false;
+  }
+
+  function dealPhase(
+    updatedPlayers: Player[],
+    nextCommunity: CardFace[],
+    nextPhase: GamePhase,
+    starterId: number | null,
+  ) {
+    setPlayers(resetPlayerBets(updatedPlayers));
+    setCommunityCards(nextCommunity);
+    setCurrentBet(0);
+    setPhase(nextPhase);
+    setPhaseTurnStarter(starterId);
+    setCurrentTurn(starterId);
+    addLog(`Dealing the ${nextPhase}.`);
+  }
+
+  function advancePhase(updatedPlayers: Player[]) {
+    const dealer =
+      updatedPlayers.find((player) => player.id === dealerId) ??
+      updatedPlayers[0];
+    const starterId = getNextActivePlayer(updatedPlayers, dealer.id);
+    const nextDeck = [...deck];
+
+    if (phase === "preflop") {
+      const flop = nextDeck.splice(0, 3);
+      setDeck(nextDeck);
+      dealPhase(updatedPlayers, flop, "flop", starterId);
+      return;
+    }
+
+    if (phase === "flop") {
+      const turnCard = nextDeck.shift();
+      if (turnCard) {
+        setDeck(nextDeck);
+        dealPhase(
+          updatedPlayers,
+          [...communityCards, turnCard],
+          "turn",
+          starterId,
+        );
+        return;
+      }
+    }
+
+    if (phase === "turn") {
+      const riverCard = nextDeck.shift();
+      if (riverCard) {
+        setDeck(nextDeck);
+        dealPhase(
+          updatedPlayers,
+          [...communityCards, riverCard],
+          "river",
+          starterId,
+        );
+        return;
+      }
+    }
+
+    if (phase === "river") {
+      setPhase("showdown");
+      const winners = determineWinners(updatedPlayers, communityCards);
+      completeRound(updatedPlayers, winners);
+    }
+  }
+
+  function handlePlayerAction(action: "fold" | "call" | "check" | "raise") {
+    if (phase === "roundEnd" || currentTurn === null) return;
+
+    const player = players.find((entry) => entry.id === currentTurn);
+    if (!player) return;
+
+    const nextTurnId = getNextActivePlayer(players, player.id);
+    const updatedPlayers = players.map((entry) => ({ ...entry }));
+    let updatedPot = pot;
+    let updatedBet = currentBet;
+    let raiseOccurred = false;
+    let message = "";
+
+    if (action === "fold") {
+      updatedPlayers.forEach((entry) => {
+        if (entry.id === player.id) entry.isFolded = true;
+      });
+      message = `${player.name} folds.`;
+    } else if (action === "call") {
+      const amount = Math.min(callAmount, player.chips);
+      updatedPlayers.forEach((entry) => {
+        if (entry.id === player.id) {
+          entry.chips -= amount;
+          entry.bet += amount;
+        }
+      });
+      updatedPot += amount;
+      message = `${player.name} calls ${formatMoney(amount)}.`;
+    } else if (action === "check") {
+      message = `${player.name} checks.`;
+    } else if (action === "raise") {
+      const raiseAmount = Math.min(
+        player.chips,
+        Math.max(BLINDS.big, callAmount + BLINDS.big),
+      );
+      updatedPlayers.forEach((entry) => {
+        if (entry.id === player.id) {
+          entry.chips -= raiseAmount;
+          entry.bet += raiseAmount;
+        }
+      });
+      updatedPot += raiseAmount;
+      updatedBet = player.bet + raiseAmount;
+      raiseOccurred = true;
+      message = `${player.name} raises to ${formatMoney(updatedBet)}.`;
+    }
+
+    setPlayers(updatedPlayers);
+    setPot(updatedPot);
+    setCurrentBet(updatedBet);
+    addLog(message);
+
+    if (resolveHandEnd(updatedPlayers)) return;
+
+    if (raiseOccurred) {
+      setPhaseTurnStarter(nextTurnId);
+      setCurrentTurn(nextTurnId);
+      return;
+    }
+
+    if (
+      nextTurnId !== null &&
+      phaseTurnStarter !== null &&
+      nextTurnId === phaseTurnStarter &&
+      hasAllActivePlayersMatched(updatedPlayers, updatedBet)
+    ) {
+      advancePhase(updatedPlayers);
+      return;
+    }
+
+    setCurrentTurn(nextTurnId);
+  }
+
+  useEffect(() => {
+    if (!currentTurn || phase === "roundEnd" || currentTurn === HUMAN_PLAYER_ID)
+      return;
+
+    const timeout = setTimeout(() => {
+      const player = players.find((entry) => entry.id === currentTurn);
+      if (!player) return;
+
+      const toCall = Math.max(currentBet - player.bet, 0);
+      const canRaise = player.chips > toCall;
+      let action: "fold" | "call" | "check" | "raise" = "check";
+
+      if (toCall > 0) {
+        if (player.chips <= toCall) {
+          action = Math.random() < 0.45 ? "fold" : "call";
+        } else if (toCall > BLINDS.big * 3) {
+          action = Math.random() < 0.6 ? "fold" : "call";
+        } else if (canRaise && Math.random() < 0.25) {
+          action = "raise";
+        } else {
+          action = "call";
+        }
+      } else if (canRaise && Math.random() < 0.2) {
+        action = "raise";
+      }
+
+      handlePlayerAction(action);
+    }, 900);
+
+    return () => clearTimeout(timeout);
+  }, [currentTurn, phase, players, currentBet]);
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        minHeight: "calc(100vh - 48px)",
+        maxWidth: "100%",
+        background: BLACK,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        overflow: "hidden",
+      }}
+    >
+      {/* Outer ambient glow */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: `radial-gradient(ellipse at 50% 50%, ${CRIMSON}14 0%, transparent 70%)`,
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Table container */}
+      <div
+        style={{
+          position: "relative",
+          width: "min(96vw, 920px)",
+          height: "min(72vh, 520px)",
+        }}
+      >
+        {/* Table felt */}
+        <div
+          style={{
+            position: "absolute",
+            left: "10%",
+            right: "10%",
+            top: "12%",
+            bottom: "12%",
+            borderRadius: "50%",
+            background: `radial-gradient(ellipse at 40% 40%, #0d3320, #072213 60%, #050f0a)`,
+            border: `6px solid #1a0008`,
+            boxShadow: `
+            0 0 0 3px ${CRIMSON}55,
+            0 0 40px rgba(0,0,0,0.9),
+            inset 0 0 60px rgba(0,0,0,0.5),
+            inset 0 0 120px rgba(0,0,0,0.3)
+          `,
+            overflow: "hidden",
+          }}
+        >
+          {/* Felt texture overlay */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage: `repeating-linear-gradient(
+              45deg,
+              transparent,
+              transparent 2px,
+              rgba(255,255,255,0.012) 2px,
+              rgba(255,255,255,0.012) 4px
+            )`,
+            }}
+          />
+          {/* Inner rail */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 8,
+              borderRadius: "50%",
+              border: `1px solid rgba(255,255,255,0.06)`,
+              pointerEvents: "none",
+            }}
+          />
+          {/* Watermark */}
+          <RoyalStackWatermark />
+          {/* Community cards + pot */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+              zIndex: 2,
+            }}
+          >
+            {/* Phase badge */}
+            <div
+              style={{
+                background: `linear-gradient(90deg, transparent, ${CRIMSON}44, transparent)`,
+                border: `1px solid ${CRIMSON}66`,
+                borderRadius: 20,
+                padding: "2px 16px",
+                fontSize: 10,
+                letterSpacing: 3,
+                color: CRIMSON,
+                textTransform: "uppercase",
+              }}
+            >
+              {phase}
+            </div>
+            {/* Community cards */}
+            <div style={{ display: "flex", gap: 6 }}>
+              {communityCards.map((card, i) => (
+                <CommunityCard
+                  key={i}
+                  card={card}
+                  revealed={communityRevealed[i]}
+                />
+              ))}
+            </div>
+            {/* Pot */}
+            <Pot amount={pot} />
+            <div
+              style={{
+                marginTop: 10,
+                color: "#ccc",
+                fontSize: 11,
+                textAlign: "center",
+                maxWidth: 360,
+                lineHeight: 1.4,
+              }}
+            >
+              <div style={{ marginBottom: 6, color: "#fff", fontWeight: 700 }}>
+                {currentLabel}
+              </div>
+              {phase !== "roundEnd" && (
+                <div style={{ marginBottom: 6 }}>
+                  {activePlayers.length} players in · Pot {formatMoney(pot)} ·
+                  Current bet {formatMoney(currentBet)}
+                </div>
+              )}
+              <div style={{ opacity: 0.85, color: "#ddd" }}>
+                {actionLog.map((entry, index) => (
+                  <div key={index}>{entry}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Rail (outer wood ring visual) */}
+        <div
+          style={{
+            position: "absolute",
+            left: "8%",
+            right: "8%",
+            top: "10%",
+            bottom: "10%",
+            borderRadius: "50%",
+            border: `10px solid transparent`,
+            backgroundImage: `
+            linear-gradient(${BLACK}, ${BLACK}),
+            linear-gradient(135deg, #3a0010, #1a0008, #3a0010, #1a0008)
+          `,
+            backgroundOrigin: "border-box",
+            backgroundClip: "padding-box, border-box",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        />
+
+        {/* Players */}
+        {players.map((player) => (
+          <div
+            key={player.id}
+            style={{
+              position: "absolute",
+              left: `${player.position.x}%`,
+              top: `${player.position.y}%`,
+              transform: "translate(-50%, -50%)",
+              zIndex: 10,
+            }}
+          >
+            <PlayerSeat
+              player={player}
+              isCurrentTurn={currentTurn === player.id}
+            />
+          </div>
+        ))}
+
+        {/* Action buttons */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: -70,
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            gap: 8,
+            zIndex: 20,
+          }}
+        >
+          {phase === "roundEnd" ? (
+            <button
+              style={{
+                background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`,
+                border: `1px solid ${CRIMSON}`,
+                borderRadius: 8,
+                color: WHITE,
+                fontFamily: "Georgia, serif",
+                fontSize: 12,
+                fontWeight: 800,
+                letterSpacing: 1,
+                padding: "10px 18px",
+                cursor: "pointer",
+                backdropFilter: "blur(8px)",
+                boxShadow: `0 0 16px ${CRIMSON}66, 0 2px 10px rgba(0,0,0,0.5)`,
+                transition: "transform 0.2s",
+              }}
+              onClick={dealNewHand}
+            >
+              DEAL NEW HAND
+            </button>
+          ) : isHumanTurn ? (
+            <>
+              <button
+                style={{
+                  background:
+                    "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  borderRadius: 8,
+                  color: WHITE,
+                  fontFamily: "Georgia, serif",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  backdropFilter: "blur(8px)",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                }}
+                onClick={() => handlePlayerAction("fold")}
+              >
+                FOLD
+              </button>
+              <button
+                style={{
+                  background:
+                    "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  borderRadius: 8,
+                  color: WHITE,
+                  fontFamily: "Georgia, serif",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  backdropFilter: "blur(8px)",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                }}
+                onClick={() =>
+                  handlePlayerAction(callAmount > 0 ? "call" : "check")
+                }
+              >
+                {callAmount > 0 ? `CALL ${formatMoney(callAmount)}` : "CHECK"}
+              </button>
+              <button
+                style={{
+                  background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`,
+                  border: `1px solid ${CRIMSON}`,
+                  borderRadius: 8,
+                  color: WHITE,
+                  fontFamily: "Georgia, serif",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  backdropFilter: "blur(8px)",
+                  boxShadow: `0 0 14px ${CRIMSON}66, 0 2px 8px rgba(0,0,0,0.5)`,
+                }}
+                onClick={() => handlePlayerAction("raise")}
+              >
+                RAISE
+              </button>
+            </>
+          ) : (
+            <button
+              disabled
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 8,
+                color: "#aaa",
+                fontFamily: "Georgia, serif",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 1,
+                padding: "8px 14px",
+                cursor: "not-allowed",
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+              }}
+            >
+              Waiting for opponents...
+            </button>
+          )}
+        </div>
+
+        {/* Header info bar */}
+        <div
+          style={{
+            position: "absolute",
+            top: -36,
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            zIndex: 20,
+          }}
+        >
+          {/* Royal Stack logo text */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 2,
+              }}
+            >
+              <SuitIcon suit="spades" size={10} color={WHITE} />
+              <SuitIcon suit="hearts" size={10} color={CRIMSON} />
+              <SuitIcon suit="diamonds" size={10} color={CRIMSON} />
+              <SuitIcon suit="clubs" size={10} color={WHITE} />
+            </div>
+            <span
+              style={{
+                fontFamily: "Georgia, serif",
+                fontSize: 15,
+                fontWeight: 700,
+                color: WHITE,
+                letterSpacing: 2,
+              }}
+            >
+              ROYAL STACK
+            </span>
+            <span
+              style={{
+                fontFamily: "Georgia, serif",
+                fontSize: 8,
+                color: CRIMSON,
+                letterSpacing: 2,
+                alignSelf: "flex-end",
+                marginBottom: 1,
+              }}
+            >
+              POWERED BY MEZO
+            </span>
+          </div>
+          <div
+            style={{
+              width: 1,
+              height: 20,
+              background: "rgba(255,255,255,0.2)",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 10,
+              color: "#888",
+              fontFamily: "monospace",
+              letterSpacing: 1,
+            }}
+          >
+            NL HOLD&apos;EM · $1/$2
+          </span>
+          <div
+            style={{
+              width: 1,
+              height: 20,
+              background: "rgba(255,255,255,0.2)",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 10,
+              color: "#666",
+              fontFamily: "monospace",
+            }}
+          >
+            Table #247
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
