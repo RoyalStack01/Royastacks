@@ -151,28 +151,28 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   const [raiseValue, setRaiseValue] = useState(0);
   const [isRaising, setIsRaising] = useState(false);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
+  const joinedRef = useRef(false);
 
   const addLog = (msg: string) => setLog((prev) => [...prev.slice(-4), msg]);
+
+  const refreshCount = (token: string, pid: string) => {
+    getPool(token, pid)
+      .then(pool => { if (typeof pool.playerCount === "number") setPlayerCount(pool.playerCount); })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     const socket = getSocket(sessionToken);
     socketRef.current = socket;
 
-    const joinPool = () => {
-      socket.emit("JOIN_POOL", { poolId });
-      getPool(sessionToken, poolId)
-        .then(pool => { if (typeof pool.playerCount === "number") setPlayerCount(pool.playerCount); })
-        .catch(() => {});
-    };
-
+    // "connect" fires on both initial connection and after every reconnect in socket.io
     socket.on("connect", () => {
       setConnected(true);
-      joinPool();
-    });
-
-    socket.on("reconnect", () => {
-      setConnected(true);
-      joinPool();
+      if (!joinedRef.current) {
+        joinedRef.current = true;
+        socket.emit("JOIN_POOL", { poolId });
+      }
+      refreshCount(sessionToken, poolId);
     });
 
     socket.on("disconnect", () => setConnected(false));
