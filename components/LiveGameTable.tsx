@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getSocket, disconnectSocket, GameState, ServerPlayer } from "../lib/socket";
 import { getPool } from "../lib/server";
 import RoyalStackLogo from "./RoyalStackLogo";
@@ -141,6 +142,7 @@ type Props = {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function LiveGameTable({ sessionToken, poolId, walletAddress }: Props) {
+  const router = useRouter();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
   const [playerCount, setPlayerCount] = useState<number>(0);
@@ -184,8 +186,13 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       addLog(`${shortAddress(addr)} joined.`);
     });
 
+    socket.on("POOL_CANCELLED", () => {
+      addLog("Pool was cancelled. Returning to lobby...");
+      setTimeout(() => router.push("/"), 2000);
+    });
+
     socket.on("PLAYER_LEFT", ({ walletAddress: addr }: { walletAddress: string }) => {
-      setPlayerCount((n) => Math.max(1, n - 1));
+      setPlayerCount((n) => Math.max(0, n - 1));
       addLog(`${shortAddress(addr)} left.`);
     });
 
