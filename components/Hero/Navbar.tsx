@@ -223,13 +223,13 @@ export default function Navbar() {
 
         {/* Desktop links */}
         <ul className="rs-nav-links">
-          {["Poker Room", "How to Play", "Promotions", "Players", "About"].map(l => (
-            <li key={l}><a href="#">{l}</a></li>
-          ))}
+          <li><a href="/game">Poker Room</a></li>
+          <li><a href="/game">Play Demo</a></li>
+          <li><a href="/connect">Get Started</a></li>
         </ul>
 
         {/* Desktop CTA */}
-        <button className="rs-nav-cta">Launch App</button>
+        <a href="/connect" className="rs-nav-cta" style={{ textDecoration: "none" }}>Launch App</a>
 
         {/* Mobile hamburger */}
         <button
@@ -244,10 +244,10 @@ export default function Navbar() {
 
         {/* Mobile dropdown */}
         <div className={`rs-nav-mobile-menu${menuOpen ? " open" : ""}`}>
-          {["Poker Room", "How to Play", "Promotions", "Players", "About"].map(l => (
-            <a key={l} href="#" onClick={() => setMenuOpen(false)}>{l}</a>
-          ))}
-          <a href="#" className="rs-nav-mobile-cta" onClick={() => setMenuOpen(false)}>
+          <a href="/game" onClick={() => setMenuOpen(false)}>Poker Room</a>
+          <a href="/game" onClick={() => setMenuOpen(false)}>Play Demo</a>
+          <a href="/connect" onClick={() => setMenuOpen(false)}>Get Started</a>
+          <a href="/connect" className="rs-nav-mobile-cta" onClick={() => setMenuOpen(false)}>
             Launch App
           </a>
         </div>

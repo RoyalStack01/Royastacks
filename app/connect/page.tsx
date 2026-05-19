@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom, getNonce, verifyAuth } from "../../lib/server";
+import { CHAIN_ID } from "../../lib/config";
 
 type Step = "connect" | "auth" | "room" | "ready";
 
@@ -10,253 +11,473 @@ const STORAGE_KEY_TOKEN = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
 const STORAGE_KEY_POOL = "royalstack:poolId";
 
+const MEZO_TESTNET = {
+  chainId: `0x${CHAIN_ID.toString(16)}`,
+  chainName: "Mezo Testnet",
+  nativeCurrency: { name: "mBTC", symbol: "mBTC", decimals: 18 },
+  rpcUrls: ["https://rpc.test.mezo.org"],
+  blockExplorerUrls: ["https://explorer.test.mezo.org"],
+};
+
+const STEPS = [
+  { key: "connect", label: "Connect Wallet" },
+  { key: "auth",    label: "Authenticate" },
+  { key: "room",    label: "Create Room" },
+  { key: "ready",   label: "Fund & Play" },
+] as const;
+
+function stepIndex(s: Step) {
+  return STEPS.findIndex((x) => x.key === s);
+}
+
 export default function ConnectPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("connect");
-  const [walletAddress, setWalletAddress] = useState<string>("");
-  const [sessionToken, setSessionToken] = useState<string>("");
-  const [poolId, setPoolId] = useState<string>("");
-  const [message, setMessage] = useState<string>("");
-  const [error, setError] = useState<string>("");
+  const [walletAddress, setWalletAddress] = useState("");
+  const [sessionToken, setSessionToken] = useState("");
+  const [poolId, setPoolId] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [wrongNetwork, setWrongNetwork] = useState(false);
 
   useEffect(() => {
-    const storedToken = sessionStorage.getItem(STORAGE_KEY_TOKEN);
+    const storedToken  = sessionStorage.getItem(STORAGE_KEY_TOKEN);
     const storedWallet = sessionStorage.getItem(STORAGE_KEY_WALLET);
-    const storedPool = sessionStorage.getItem(STORAGE_KEY_POOL);
-
-    if (storedWallet) {
-      setWalletAddress(storedWallet);
-      setStep(storedToken ? "room" : "auth");
-    }
-
-    if (storedToken) {
-      setSessionToken(storedToken);
-      setStep(storedPool ? "ready" : "room");
-    }
-
-    if (storedPool) {
-      setPoolId(storedPool);
-      setStep("ready");
-    }
+    const storedPool   = sessionStorage.getItem(STORAGE_KEY_POOL);
+    if (storedWallet) { setWalletAddress(storedWallet); setStep(storedToken ? "room" : "auth"); }
+    if (storedToken)  { setSessionToken(storedToken); setStep(storedPool ? "ready" : "room"); }
+    if (storedPool)   { setPoolId(storedPool); setStep("ready"); }
   }, []);
+
+  async function switchNetwork() {
+    const eth = (window as any).ethereum;
+    if (!eth) return;
+    try {
+      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: MEZO_TESTNET.chainId }] });
+      setWrongNetwork(false);
+    } catch (e: any) {
+      if (e.code === 4902) {
+        await eth.request({ method: "wallet_addEthereumChain", params: [MEZO_TESTNET] });
+        setWrongNetwork(false);
+      }
+    }
+  }
+
+  async function checkNetwork() {
+    const eth = (window as any).ethereum;
+    if (!eth) return;
+    const chainHex: string = await eth.request({ method: "eth_chainId" });
+    setWrongNetwork(parseInt(chainHex, 16) !== CHAIN_ID);
+  }
 
   const connectWallet = async () => {
     setError("");
-    setMessage("");
-
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) {
-      setError(
-        "No Ethereum wallet detected. Install MetaMask or another injected wallet.",
-      );
-      return;
-    }
-
+    const eth = (window as any).ethereum;
+    if (!eth) { setError("No Ethereum wallet found. Install MetaMask or a compatible wallet."); return; }
     try {
       setLoading(true);
-      const accounts = (await ethereum.request({
-        method: "eth_requestAccounts",
-      })) as string[];
-      if (!accounts || accounts.length === 0) {
-        throw new Error("No wallet account found.");
-      }
+      const accounts = await eth.request({ method: "eth_requestAccounts" }) as string[];
+      if (!accounts?.length) throw new Error("No account returned.");
       const address = accounts[0];
       setWalletAddress(address);
       sessionStorage.setItem(STORAGE_KEY_WALLET, address);
+      await checkNetwork();
       setStep("auth");
-      setMessage(`Wallet connected: ${address}`);
-    } catch (err) {
-      setError((err as Error)?.message ?? String(err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
   };
 
   const authenticate = async () => {
     setError("");
-    setMessage("");
-    if (!walletAddress) {
-      setError("Wallet is not connected.");
-      return;
-    }
-
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) {
-      setError("No Ethereum wallet detected.");
-      return;
-    }
-
+    if (!walletAddress) { setError("Connect your wallet first."); return; }
+    const eth = (window as any).ethereum;
+    if (!eth) { setError("No Ethereum wallet found."); return; }
     try {
       setLoading(true);
-      const nonceResponse = await getNonce(walletAddress);
-      const signature = (await ethereum.request({
-        method: "personal_sign",
-        params: [nonceResponse.message, walletAddress],
-      })) as string;
-
-      const verifyResponse = await verifyAuth(
-        walletAddress,
-        signature,
-        nonceResponse.message,
-      );
-      setSessionToken(verifyResponse.sessionToken);
-      sessionStorage.setItem(STORAGE_KEY_TOKEN, verifyResponse.sessionToken);
+      const { message } = await getNonce(walletAddress);
+      const signature = await eth.request({ method: "personal_sign", params: [message, walletAddress] }) as string;
+      const { sessionToken: token } = await verifyAuth(walletAddress, signature, message);
+      setSessionToken(token);
+      sessionStorage.setItem(STORAGE_KEY_TOKEN, token);
       setStep("room");
-      setMessage("Authentication successful.");
-    } catch (err) {
-      setError((err as Error)?.message ?? String(err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
   };
 
   const startRoom = async () => {
     setError("");
-    setMessage("");
-    if (!sessionToken) {
-      setError("Session token is missing. Authenticate first.");
-      return;
-    }
-
+    if (!sessionToken) { setError("Authenticate first."); return; }
     try {
       setLoading(true);
-      const roomResponse = await createRoom(sessionToken);
-      setPoolId(roomResponse.poolId);
-      sessionStorage.setItem(STORAGE_KEY_POOL, roomResponse.poolId);
-      setMessage(`Room created: ${roomResponse.poolId}`);
+      const { poolId: id } = await createRoom(sessionToken);
+      setPoolId(id);
+      sessionStorage.setItem(STORAGE_KEY_POOL, id);
       setStep("ready");
       router.push("/fund");
-    } catch (err) {
-      setError((err as Error)?.message ?? String(err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
   };
 
+  const current = stepIndex(step);
+
   return (
-    <main style={{ padding: 24, maxWidth: 780, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 32, marginBottom: 8 }}>Connect Wallet</h1>
-      <p style={{ color: "#666", marginBottom: 24 }}>
-        Follow the flow to connect your wallet, authenticate with the server,
-        and create a room.
-      </p>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Audiowide&family=Electrolize&family=Share+Tech+Mono&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #000; }
+        .connect-wrap {
+          min-height: 100vh;
+          background:
+            radial-gradient(circle at 20% 50%, rgba(255,10,84,0.07) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(255,10,84,0.05) 0%, transparent 50%),
+            #000;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 40px 20px 60px;
+        }
+        .back-link {
+          align-self: flex-start;
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 11px;
+          letter-spacing: 2px;
+          color: rgba(255,255,255,0.3);
+          text-decoration: none;
+          text-transform: uppercase;
+          margin-bottom: 32px;
+          transition: color 0.2s;
+        }
+        .back-link:hover { color: #FF0A54; }
+        .connect-title {
+          font-family: 'Audiowide', sans-serif;
+          font-size: clamp(22px, 5vw, 36px);
+          color: #fff;
+          letter-spacing: 3px;
+          text-transform: uppercase;
+          margin-bottom: 6px;
+          text-align: center;
+        }
+        .connect-sub {
+          font-family: 'Electrolize', sans-serif;
+          font-size: 13px;
+          color: rgba(255,255,255,0.4);
+          letter-spacing: 1px;
+          margin-bottom: 32px;
+          text-align: center;
+        }
+        /* Chain badge */
+        .chain-badge {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: rgba(255,10,84,0.08);
+          border: 1px solid rgba(255,10,84,0.25);
+          border-radius: 12px;
+          padding: 12px 20px;
+          margin-bottom: 32px;
+          width: 100%;
+          max-width: 500px;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .chain-badge-info {
+          flex: 1;
+          min-width: 160px;
+        }
+        .chain-badge-name {
+          font-family: 'Audiowide', sans-serif;
+          font-size: 12px;
+          color: #FF0A54;
+          letter-spacing: 1px;
+        }
+        .chain-badge-detail {
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 10px;
+          color: rgba(255,255,255,0.35);
+          letter-spacing: 1px;
+          margin-top: 3px;
+        }
+        .chain-switch-btn {
+          font-family: 'Audiowide', sans-serif;
+          font-size: 9px;
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          background: rgba(255,10,84,0.15);
+          color: #FF0A54;
+          border: 1px solid rgba(255,10,84,0.4);
+          border-radius: 8px;
+          padding: 7px 14px;
+          cursor: pointer;
+          transition: background 0.2s;
+          white-space: nowrap;
+        }
+        .chain-switch-btn:hover { background: rgba(255,10,84,0.25); }
+        .chain-ok {
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 10px;
+          color: #4ade80;
+          letter-spacing: 1px;
+          white-space: nowrap;
+        }
+        /* Progress bar */
+        .progress-row {
+          display: flex;
+          align-items: center;
+          width: 100%;
+          max-width: 500px;
+          margin-bottom: 36px;
+          gap: 0;
+        }
+        .progress-step {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          flex: 1;
+          position: relative;
+        }
+        .progress-circle {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: 2px solid rgba(255,255,255,0.15);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 12px;
+          color: rgba(255,255,255,0.3);
+          background: #000;
+          position: relative;
+          z-index: 1;
+          transition: all 0.3s;
+        }
+        .progress-circle.done {
+          border-color: #FF0A54;
+          background: #FF0A54;
+          color: #fff;
+        }
+        .progress-circle.active {
+          border-color: #FF0A54;
+          color: #FF0A54;
+          box-shadow: 0 0 12px rgba(255,10,84,0.4);
+        }
+        .progress-label {
+          font-family: 'Electrolize', sans-serif;
+          font-size: 9px;
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.25);
+          margin-top: 6px;
+          text-align: center;
+          white-space: nowrap;
+          transition: color 0.3s;
+        }
+        .progress-label.active { color: #FF0A54; }
+        .progress-label.done   { color: rgba(255,255,255,0.5); }
+        .progress-line {
+          flex: 1;
+          height: 1px;
+          background: rgba(255,255,255,0.1);
+          margin-bottom: 20px;
+          transition: background 0.3s;
+        }
+        .progress-line.done { background: #FF0A54; }
+        /* Cards */
+        .step-card {
+          width: 100%;
+          max-width: 500px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 16px;
+          padding: 24px;
+          margin-bottom: 14px;
+          transition: border-color 0.3s;
+        }
+        .step-card.active {
+          border-color: rgba(255,10,84,0.35);
+          background: rgba(255,10,84,0.04);
+        }
+        .step-card.done {
+          opacity: 0.55;
+        }
+        .step-card-title {
+          font-family: 'Audiowide', sans-serif;
+          font-size: 13px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          color: #fff;
+          margin-bottom: 6px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .step-card-title .done-check {
+          color: #4ade80;
+          font-size: 14px;
+        }
+        .step-card-desc {
+          font-family: 'Electrolize', sans-serif;
+          font-size: 12px;
+          color: rgba(255,255,255,0.4);
+          letter-spacing: 0.5px;
+          margin-bottom: 16px;
+          line-height: 1.6;
+        }
+        .step-card-detail {
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 11px;
+          color: rgba(255,255,255,0.5);
+          margin-top: 10px;
+          word-break: break-all;
+        }
+        .action-btn {
+          font-family: 'Audiowide', sans-serif;
+          font-size: 11px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          background: #FF0A54;
+          color: #fff;
+          border: none;
+          padding: 13px 28px;
+          clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+          cursor: pointer;
+          box-shadow: 0 0 20px rgba(255,10,84,0.3);
+          transition: box-shadow 0.2s, transform 0.2s;
+          min-height: 48px;
+        }
+        .action-btn:hover { box-shadow: 0 0 35px rgba(255,10,84,0.6); transform: translateY(-2px); }
+        .action-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+        .error-box {
+          width: 100%;
+          max-width: 500px;
+          background: rgba(255,50,50,0.1);
+          border: 1px solid rgba(255,50,50,0.3);
+          border-radius: 10px;
+          padding: 12px 16px;
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 11px;
+          color: #ff6b6b;
+          letter-spacing: 0.5px;
+          margin-top: 8px;
+        }
+        .demo-link {
+          margin-top: 32px;
+          font-family: 'Electrolize', sans-serif;
+          font-size: 12px;
+          color: rgba(255,255,255,0.25);
+          text-align: center;
+        }
+        .demo-link a {
+          color: rgba(255,10,84,0.6);
+          text-decoration: none;
+          margin-left: 4px;
+        }
+        .demo-link a:hover { color: #FF0A54; }
+      `}</style>
 
-      <div style={{ display: "grid", gap: 18 }}>
-        <section
-          style={{
-            padding: 24,
-            borderRadius: 16,
-            background: "#111",
-            color: "white",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 20 }}>Step 1 — Connect Wallet</h2>
-          <p style={{ color: "#ccc" }}>
-            Use your injected wallet to connect to the app.
-          </p>
-          <button
-            type="button"
-            onClick={connectWallet}
-            disabled={loading || step !== "connect"}
-            style={{
-              marginTop: 16,
-              padding: "14px 20px",
-              borderRadius: 999,
-              background: "#e8003a",
-              color: "white",
-              border: "none",
-              cursor: "pointer",
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
-            {loading && step === "connect" ? "Connecting…" : "Connect Wallet"}
-          </button>
-          {walletAddress && (
-            <p style={{ marginTop: 16, color: "#9ccbff" }}>
-              Connected account: {walletAddress}
-            </p>
-          )}
-        </section>
+      <div className="connect-wrap">
+        <a href="/" className="back-link">← Back to home</a>
 
-        <section
-          style={{
-            padding: 24,
-            borderRadius: 16,
-            background: "#111",
-            color: "white",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 20 }}>Step 2 — Authenticate</h2>
-          <p style={{ color: "#ccc" }}>
-            Sign the nonce message from the server and receive a session token.
-          </p>
-          <button
-            type="button"
-            onClick={authenticate}
-            disabled={loading || step === "connect" || step === "ready"}
-            style={{
-              marginTop: 16,
-              padding: "14px 20px",
-              borderRadius: 999,
-              background: "#0070f3",
-              color: "white",
-              border: "none",
-              cursor: "pointer",
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
-            {loading && step === "auth"
-              ? "Authenticating…"
-              : "Authenticate Wallet"}
-          </button>
-          {sessionToken && (
-            <p style={{ marginTop: 16, color: "#9ceb9c" }}>
-              Authenticated successfully.
-            </p>
-          )}
-        </section>
+        <div className="connect-title">Get Started</div>
+        <div className="connect-sub">Connect your wallet to join a real-money table</div>
 
-        <section
-          style={{
-            padding: 24,
-            borderRadius: 16,
-            background: "#111",
-            color: "white",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: 20 }}>Step 3 — Create Room</h2>
-          <p style={{ color: "#ccc" }}>
-            Create a game room on the server. After creation, you will be
-            redirected to funding.
-          </p>
-          <button
-            type="button"
-            onClick={startRoom}
-            disabled={loading || !sessionToken || step === "ready"}
-            style={{
-              marginTop: 16,
-              padding: "14px 20px",
-              borderRadius: 999,
-              background: "#11cdef",
-              color: "black",
-              border: "none",
-              cursor: "pointer",
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
-            {loading && step === "room" ? "Creating room…" : "Create Room"}
-          </button>
-          {poolId && (
-            <p style={{ marginTop: 16, color: "#9ceb9c" }}>
-              Created pool: {poolId}
-            </p>
-          )}
-        </section>
+        {/* Chain badge */}
+        <div className="chain-badge">
+          <div className="chain-badge-info">
+            <div className="chain-badge-name">Mezo Testnet</div>
+            <div className="chain-badge-detail">Chain ID: 31611 · RPC: rpc.test.mezo.org · Gas: mBTC</div>
+          </div>
+          {wrongNetwork
+            ? <button className="chain-switch-btn" onClick={switchNetwork}>Switch Network</button>
+            : walletAddress
+              ? <span className="chain-ok">✓ Correct network</span>
+              : null
+          }
+        </div>
 
-        {message && <div style={{ color: "#9ceb9c" }}>{message}</div>}
-        {error && <div style={{ color: "#ff6b6b" }}>{error}</div>}
+        {/* Progress indicator */}
+        <div className="progress-row">
+          {STEPS.map((s, i) => {
+            const isDone   = current > i;
+            const isActive = current === i;
+            return (
+              <div key={s.key} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? "1" : "0" }}>
+                <div className="progress-step">
+                  <div className={`progress-circle${isDone ? " done" : isActive ? " active" : ""}`}>
+                    {isDone ? "✓" : i + 1}
+                  </div>
+                  <div className={`progress-label${isDone ? " done" : isActive ? " active" : ""}`}>{s.label}</div>
+                </div>
+                {i < STEPS.length - 1 && <div className={`progress-line${isDone ? " done" : ""}`} />}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Step 1 — Connect */}
+        <div className={`step-card${step === "connect" ? " active" : current > 0 ? " done" : ""}`}>
+          <div className="step-card-title">
+            {current > 0 && <span className="done-check">✓</span>}
+            Step 1 — Connect Wallet
+          </div>
+          <div className="step-card-desc">
+            Connect your MetaMask or compatible wallet. Make sure you are on Mezo Testnet (Chain ID 31611) and have mBTC for gas.
+          </div>
+          {walletAddress
+            ? <div className="step-card-detail">Connected: {walletAddress}</div>
+            : (
+              <button className="action-btn" onClick={connectWallet} disabled={loading}>
+                {loading && step === "connect" ? "Connecting…" : "Connect Wallet"}
+              </button>
+            )
+          }
+        </div>
+
+        {/* Step 2 — Authenticate */}
+        <div className={`step-card${step === "auth" ? " active" : current > 1 ? " done" : ""}`}>
+          <div className="step-card-title">
+            {current > 1 && <span className="done-check">✓</span>}
+            Step 2 — Authenticate
+          </div>
+          <div className="step-card-desc">
+            Sign a nonce message to prove wallet ownership. No gas required — this is just a signature.
+          </div>
+          {sessionToken
+            ? <div className="step-card-detail">Authenticated ✓</div>
+            : (
+              <button className="action-btn" onClick={authenticate} disabled={loading || !walletAddress || step === "connect"}>
+                {loading && step === "auth" ? "Signing…" : "Sign & Authenticate"}
+              </button>
+            )
+          }
+        </div>
+
+        {/* Step 3 — Create Room */}
+        <div className={`step-card${step === "room" ? " active" : current > 2 ? " done" : ""}`}>
+          <div className="step-card-title">
+            {current > 2 && <span className="done-check">✓</span>}
+            Step 3 — Create Room
+          </div>
+          <div className="step-card-desc">
+            Reserve your seat. The server creates a pool on-chain — no gas from you at this step.
+          </div>
+          {poolId
+            ? <div className="step-card-detail">Pool ID: {poolId}</div>
+            : (
+              <button className="action-btn" onClick={startRoom} disabled={loading || !sessionToken}>
+                {loading && step === "room" ? "Creating…" : "Create Room"}
+              </button>
+            )
+          }
+        </div>
+
+        {error && <div className="error-box">{error}</div>}
+
+        <div className="demo-link">
+          Just want to try it out?<a href="/game">Play the free demo →</a>
+        </div>
       </div>
-    </main>
+    </>
   );
 }

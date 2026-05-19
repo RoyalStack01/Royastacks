@@ -624,7 +624,7 @@ export default function RoyalStacksHero() {
             <div className="hero-left">
               <div className="chain-pill">
                 <span className="pulse-dot" />
-                <span>Live · Mezo Blockchain</span>
+                <span>Mezo Testnet · Chain ID 31611</span>
               </div>
 
               <h1 className="hero-title">
@@ -640,7 +640,7 @@ export default function RoyalStacksHero() {
 
               <div className="btn-row">
                 <button className="btn-primary" onClick={handlePlayPoker}>Play Poker Now</button>
-                <button className="btn-ghost">How It Works</button>
+                <button className="btn-ghost" onClick={() => router.push("/connect")}>Connect Wallet</button>
               </div>
 
               {/* Stats shown on tablet+ in left column */}
