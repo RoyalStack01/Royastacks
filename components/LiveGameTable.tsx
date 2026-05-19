@@ -163,7 +163,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       .then(pool => {
         if (pool.status === 'CLOSED') {
           addLog("Pool was cancelled. Returning to lobby...");
-          setTimeout(() => router.push("/"), 2000);
+          setTimeout(() => router.push("/lobby"), 2000);
           return;
         }
         if (typeof pool.playerCount === "number") setPlayerCount(pool.playerCount);
@@ -199,7 +199,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
     socket.on("POOL_CANCELLED", () => {
       addLog("Pool was cancelled. Returning to lobby...");
-      setTimeout(() => router.push("/"), 2000);
+      setTimeout(() => router.push("/lobby"), 2000);
     });
 
     socket.on("PLAYER_LEFT", ({ walletAddress: addr }: { walletAddress: string }) => {
