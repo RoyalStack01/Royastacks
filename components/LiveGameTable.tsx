@@ -162,6 +162,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     getPool(token, pid)
       .then(pool => {
         if (pool.status === 'CLOSED') {
+          sessionStorage.removeItem("royalstack:poolId");
           addLog("Pool was cancelled. Returning to lobby...");
           setTimeout(() => router.push("/lobby"), 2000);
           return;
@@ -198,6 +199,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     });
 
     socket.on("POOL_CANCELLED", () => {
+      sessionStorage.removeItem("royalstack:poolId");
       addLog("Pool was cancelled. Returning to lobby...");
       setTimeout(() => router.push("/lobby"), 2000);
     });
