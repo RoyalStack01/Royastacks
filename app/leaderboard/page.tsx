@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getLeaderboard } from "../../lib/server";
+import { walletEmoji } from "../../lib/avatar";
 
 const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
@@ -188,6 +189,13 @@ export default function LeaderboardPage() {
           font-family: 'Share Tech Mono', monospace;
           font-size: 12px;
           letter-spacing: 1px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .player-emoji {
+          font-size: 20px;
+          line-height: 1;
         }
         .you-badge {
           display: inline-block;
@@ -320,6 +328,7 @@ export default function LeaderboardPage() {
                           {i < 3 ? <span className="medal">{MEDALS[i]}</span> : i + 1}
                         </td>
                         <td className="addr-cell">
+                          <span className="player-emoji">{walletEmoji(e.playerId)}</span>
                           {shortAddr(e.playerId)}
                           {isMe && <span className="you-badge">YOU</span>}
                         </td>

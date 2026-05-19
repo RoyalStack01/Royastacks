@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSocket, disconnectSocket, GameState, ServerPlayer } from "../lib/socket";
 import { getPool } from "../lib/server";
+import { walletEmoji } from "../lib/avatar";
 import RoyalStackLogo from "./RoyalStackLogo";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -193,7 +194,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
     socket.on("PLAYER_JOINED", ({ walletAddress: addr }: { walletAddress: string }) => {
       setPlayerCount((n) => n + 1);
-      addLog(`${shortAddress(addr)} joined.`);
+      addLog(`${walletEmoji(addr)} ${shortAddress(addr)} joined.`);
     });
 
     socket.on("POOL_CANCELLED", () => {
@@ -203,7 +204,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
     socket.on("PLAYER_LEFT", ({ walletAddress: addr }: { walletAddress: string }) => {
       setPlayerCount((n) => Math.max(0, n - 1));
-      addLog(`${shortAddress(addr)} left.`);
+      addLog(`${walletEmoji(addr)} ${shortAddress(addr)} left.`);
     });
 
     socket.on("GAME_STATE_UPDATED", (state: GameState) => {
@@ -254,6 +255,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   if (!gameState) {
     return (
       <div style={{ width: "100%", minHeight: "calc(100vh - 48px)", background: BLACK, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: WHITE, fontFamily: "Georgia, serif" }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>{walletEmoji(walletAddress)}</div>
         <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 2, marginBottom: 16 }}>WAITING FOR PLAYERS</div>
         <div style={{ color: "#888", fontSize: 14, marginBottom: 8 }}>{playerCount} / 5 players in pool #{poolId}</div>
         <div style={{ color: connected ? "#9ceb9c" : "#ff6b6b", fontSize: 12, letterSpacing: 1 }}>{connected ? "● CONNECTED" : "○ CONNECTING..."}</div>
@@ -368,6 +370,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
                 {/* Nameplate */}
                 <div style={{ position: "relative" }}>
                   <div style={{ background: isCurrentTurn ? `linear-gradient(135deg, ${CRIMSON}, #9e0028)` : "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))", border: `1.5px solid ${isCurrentTurn ? CRIMSON : "rgba(255,255,255,0.18)"}`, borderRadius: 10, padding: "8px 16px", backdropFilter: "blur(8px)", boxShadow: isCurrentTurn ? `0 0 18px ${CRIMSON}88, 0 2px 8px rgba(0,0,0,0.6)` : "0 2px 8px rgba(0,0,0,0.5)", minWidth: 110, textAlign: "center", transition: "all 0.3s" }}>
+                    <div style={{ fontSize: 22, lineHeight: 1, marginBottom: 2 }}>{walletEmoji(player.walletAddress)}</div>
                     {isHuman && <div style={{ fontSize: 9, color: "#aaffaa", letterSpacing: 1, marginBottom: 2 }}>YOU</div>}
                     <div style={{ color: WHITE, fontFamily: "Poppins, Georgia, serif", fontSize: 15, fontWeight: 800, letterSpacing: 0.6 }}>
                       {shortAddress(player.walletAddress)}
