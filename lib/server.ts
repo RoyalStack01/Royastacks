@@ -56,11 +56,10 @@ export async function createRoom(sessionToken: string) {
   });
 }
 
-export async function joinPool(sessionToken: string, poolId: string, amount: number) {
+export async function joinPool(sessionToken: string, poolId: string) {
   return request<{ poolId: string; playerCount: number; isFull: boolean }>(`/api/pools/${encodeURIComponent(poolId)}/join`, {
     method: "POST",
     headers: { Authorization: `Bearer ${sessionToken}` },
-    body: JSON.stringify({ amount }),
   });
 }
 
@@ -79,6 +78,29 @@ export async function listPools(sessionToken: string) {
 
 export async function getPool(sessionToken: string, poolId: string) {
   return request<Record<string, unknown>>(`/api/pools/${encodeURIComponent(poolId)}`, {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  });
+}
+
+export async function getLeaderboard(sessionToken: string, limit = 10) {
+  return request<Array<{
+    playerId: string;
+    handsPlayed: number;
+    handsWon: number;
+    totalWinnings: number;
+  }>>(`/api/leaderboard?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  });
+}
+
+export async function getPlayerStats(sessionToken: string, walletAddress: string) {
+  return request<{
+    playerId: string;
+    handsPlayed: number;
+    handsWon: number;
+    totalWinnings: number;
+    totalRakePaid: number;
+  }>(`/api/players/${encodeURIComponent(walletAddress)}/stats`, {
     headers: { Authorization: `Bearer ${sessionToken}` },
   });
 }

@@ -119,9 +119,7 @@ export default function FundPage() {
     if (!sessionToken || !poolId || !depositHash) { setError("Complete the deposit first."); return; }
     try {
       setStatus("registering");
-      const n = Number(amount);
-      if (isNaN(n) || n <= 0) throw new Error("Invalid amount.");
-      await joinPool(sessionToken, poolId, n);
+      await joinPool(sessionToken, poolId);
       setStatus("complete");
     } catch (e) { setError((e as Error).message); setStatus("deposited"); }
   }

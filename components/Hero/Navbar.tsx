@@ -223,9 +223,9 @@ export default function Navbar() {
 
         {/* Desktop links */}
         <ul className="rs-nav-links">
-          <li><a href="/game">Poker Room</a></li>
-          <li><a href="/game">Play Demo</a></li>
-          <li><a href="/connect">Get Started</a></li>
+          <li><a href="/lobby">Lobby</a></li>
+          <li><a href="/leaderboard">Leaderboard</a></li>
+          <li><a href="/profile">Profile</a></li>
         </ul>
 
         {/* Desktop CTA */}
@@ -244,9 +244,9 @@ export default function Navbar() {
 
         {/* Mobile dropdown */}
         <div className={`rs-nav-mobile-menu${menuOpen ? " open" : ""}`}>
-          <a href="/game" onClick={() => setMenuOpen(false)}>Poker Room</a>
-          <a href="/game" onClick={() => setMenuOpen(false)}>Play Demo</a>
-          <a href="/connect" onClick={() => setMenuOpen(false)}>Get Started</a>
+          <a href="/lobby" onClick={() => setMenuOpen(false)}>Lobby</a>
+          <a href="/leaderboard" onClick={() => setMenuOpen(false)}>Leaderboard</a>
+          <a href="/profile" onClick={() => setMenuOpen(false)}>Profile</a>
           <a href="/connect" className="rs-nav-mobile-cta" onClick={() => setMenuOpen(false)}>
             Launch App
           </a>

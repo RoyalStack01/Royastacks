@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createRoom, getNonce, verifyAuth } from "../../lib/server";
+import { getNonce, verifyAuth } from "../../lib/server";
 import { CHAIN_ID } from "../../lib/config";
 
-type Step = "connect" | "auth" | "room" | "ready";
+type Step = "connect" | "auth";
 
-const STORAGE_KEY_TOKEN = "royalstack:sessionToken";
+const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
-const STORAGE_KEY_POOL = "royalstack:poolId";
 
 const MEZO_TESTNET = {
   chainId: `0x${CHAIN_ID.toString(16)}`,
@@ -22,8 +21,7 @@ const MEZO_TESTNET = {
 const STEPS = [
   { key: "connect", label: "Connect Wallet" },
   { key: "auth",    label: "Authenticate" },
-  { key: "room",    label: "Create Room" },
-  { key: "ready",   label: "Fund & Play" },
+  { key: "lobby",   label: "Waiting Floor" },
 ] as const;
 
 function stepIndex(s: Step) {
@@ -32,21 +30,23 @@ function stepIndex(s: Step) {
 
 export default function ConnectPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("connect");
+  const [step, setStep]               = useState<Step>("connect");
   const [walletAddress, setWalletAddress] = useState("");
-  const [sessionToken, setSessionToken] = useState("");
-  const [poolId, setPoolId] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [sessionToken, setSessionToken]   = useState("");
+  const [error, setError]             = useState("");
+  const [loading, setLoading]         = useState(false);
   const [wrongNetwork, setWrongNetwork] = useState(false);
 
   useEffect(() => {
     const storedToken  = sessionStorage.getItem(STORAGE_KEY_TOKEN);
     const storedWallet = sessionStorage.getItem(STORAGE_KEY_WALLET);
-    const storedPool   = sessionStorage.getItem(STORAGE_KEY_POOL);
-    if (storedWallet) { setWalletAddress(storedWallet); setStep(storedToken ? "room" : "auth"); }
-    if (storedToken)  { setSessionToken(storedToken); setStep(storedPool ? "ready" : "room"); }
-    if (storedPool)   { setPoolId(storedPool); setStep("ready"); }
+    if (storedToken && storedWallet) {
+      // Already authenticated — go straight to lobby
+      router.replace("/lobby");
+      return;
+    }
+    if (storedWallet) { setWalletAddress(storedWallet); setStep("auth"); }
+    if (storedToken)  { setSessionToken(storedToken); }
   }, []);
 
   async function switchNetwork() {
@@ -66,8 +66,8 @@ export default function ConnectPage() {
   async function checkNetwork() {
     const eth = (window as any).ethereum;
     if (!eth) return;
-    const chainHex: string = await eth.request({ method: "eth_chainId" });
-    setWrongNetwork(parseInt(chainHex, 16) !== CHAIN_ID);
+    const hex: string = await eth.request({ method: "eth_chainId" });
+    setWrongNetwork(parseInt(hex, 16) !== CHAIN_ID);
   }
 
   const connectWallet = async () => {
@@ -99,21 +99,7 @@ export default function ConnectPage() {
       const { sessionToken: token } = await verifyAuth(walletAddress, signature, message);
       setSessionToken(token);
       sessionStorage.setItem(STORAGE_KEY_TOKEN, token);
-      setStep("room");
-    } catch (e) { setError((e as Error).message); }
-    finally { setLoading(false); }
-  };
-
-  const startRoom = async () => {
-    setError("");
-    if (!sessionToken) { setError("Authenticate first."); return; }
-    try {
-      setLoading(true);
-      const { poolId: id } = await createRoom(sessionToken);
-      setPoolId(id);
-      sessionStorage.setItem(STORAGE_KEY_POOL, id);
-      setStep("ready");
-      router.push("/fund");
+      router.push("/lobby");
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }
   };
@@ -166,7 +152,6 @@ export default function ConnectPage() {
           margin-bottom: 32px;
           text-align: center;
         }
-        /* Chain badge */
         .chain-badge {
           display: flex;
           align-items: center;
@@ -181,10 +166,7 @@ export default function ConnectPage() {
           flex-wrap: wrap;
           gap: 8px;
         }
-        .chain-badge-info {
-          flex: 1;
-          min-width: 160px;
-        }
+        .chain-badge-info { flex: 1; min-width: 160px; }
         .chain-badge-name {
           font-family: 'Audiowide', sans-serif;
           font-size: 12px;
@@ -220,14 +202,13 @@ export default function ConnectPage() {
           letter-spacing: 1px;
           white-space: nowrap;
         }
-        /* Progress bar */
+        /* Progress */
         .progress-row {
           display: flex;
           align-items: center;
           width: 100%;
           max-width: 500px;
           margin-bottom: 36px;
-          gap: 0;
         }
         .progress-step {
           display: flex;
@@ -252,16 +233,8 @@ export default function ConnectPage() {
           z-index: 1;
           transition: all 0.3s;
         }
-        .progress-circle.done {
-          border-color: #FF0A54;
-          background: #FF0A54;
-          color: #fff;
-        }
-        .progress-circle.active {
-          border-color: #FF0A54;
-          color: #FF0A54;
-          box-shadow: 0 0 12px rgba(255,10,84,0.4);
-        }
+        .progress-circle.done  { border-color: #FF0A54; background: #FF0A54; color: #fff; }
+        .progress-circle.active { border-color: #FF0A54; color: #FF0A54; box-shadow: 0 0 12px rgba(255,10,84,0.4); }
         .progress-label {
           font-family: 'Electrolize', sans-serif;
           font-size: 9px;
@@ -294,13 +267,8 @@ export default function ConnectPage() {
           margin-bottom: 14px;
           transition: border-color 0.3s;
         }
-        .step-card.active {
-          border-color: rgba(255,10,84,0.35);
-          background: rgba(255,10,84,0.04);
-        }
-        .step-card.done {
-          opacity: 0.55;
-        }
+        .step-card.active { border-color: rgba(255,10,84,0.35); background: rgba(255,10,84,0.04); }
+        .step-card.done   { opacity: 0.55; }
         .step-card-title {
           font-family: 'Audiowide', sans-serif;
           font-size: 13px;
@@ -312,10 +280,7 @@ export default function ConnectPage() {
           align-items: center;
           gap: 10px;
         }
-        .step-card-title .done-check {
-          color: #4ade80;
-          font-size: 14px;
-        }
+        .done-check { color: #4ade80; font-size: 14px; }
         .step-card-desc {
           font-family: 'Electrolize', sans-serif;
           font-size: 12px;
@@ -380,7 +345,7 @@ export default function ConnectPage() {
         <a href="/" className="back-link">← Back to home</a>
 
         <div className="connect-title">Get Started</div>
-        <div className="connect-sub">Connect your wallet to join a real-money table</div>
+        <div className="connect-sub">Connect your wallet to browse the waiting floor</div>
 
         {/* Chain badge */}
         <div className="chain-badge">
@@ -396,11 +361,11 @@ export default function ConnectPage() {
           }
         </div>
 
-        {/* Progress indicator */}
+        {/* Progress bar — 3 steps total (connect, auth, lobby) */}
         <div className="progress-row">
           {STEPS.map((s, i) => {
-            const isDone   = current > i;
-            const isActive = current === i;
+            const isDone   = current > i || (s.key === "lobby" && !!sessionToken);
+            const isActive = current === i && s.key !== "lobby";
             return (
               <div key={s.key} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? "1" : "0" }}>
                 <div className="progress-step">
@@ -409,7 +374,7 @@ export default function ConnectPage() {
                   </div>
                   <div className={`progress-label${isDone ? " done" : isActive ? " active" : ""}`}>{s.label}</div>
                 </div>
-                {i < STEPS.length - 1 && <div className={`progress-line${isDone ? " done" : ""}`} />}
+                {i < STEPS.length - 1 && <div className={`progress-line${current > i ? " done" : ""}`} />}
               </div>
             );
           })}
@@ -435,38 +400,19 @@ export default function ConnectPage() {
         </div>
 
         {/* Step 2 — Authenticate */}
-        <div className={`step-card${step === "auth" ? " active" : current > 1 ? " done" : ""}`}>
+        <div className={`step-card${step === "auth" ? " active" : sessionToken ? " done" : ""}`}>
           <div className="step-card-title">
-            {current > 1 && <span className="done-check">✓</span>}
+            {sessionToken && <span className="done-check">✓</span>}
             Step 2 — Authenticate
           </div>
           <div className="step-card-desc">
-            Sign a nonce message to prove wallet ownership. No gas required — this is just a signature.
+            Sign a nonce message to prove wallet ownership. No gas required — this is just a signature. You'll be taken to the waiting floor after.
           </div>
           {sessionToken
-            ? <div className="step-card-detail">Authenticated ✓</div>
+            ? <div className="step-card-detail">Authenticated ✓ — redirecting to lobby…</div>
             : (
               <button className="action-btn" onClick={authenticate} disabled={loading || !walletAddress || step === "connect"}>
-                {loading && step === "auth" ? "Signing…" : "Sign & Authenticate"}
-              </button>
-            )
-          }
-        </div>
-
-        {/* Step 3 — Create Room */}
-        <div className={`step-card${step === "room" ? " active" : current > 2 ? " done" : ""}`}>
-          <div className="step-card-title">
-            {current > 2 && <span className="done-check">✓</span>}
-            Step 3 — Create Room
-          </div>
-          <div className="step-card-desc">
-            Reserve your seat. The server creates a pool on-chain — no gas from you at this step.
-          </div>
-          {poolId
-            ? <div className="step-card-detail">Pool ID: {poolId}</div>
-            : (
-              <button className="action-btn" onClick={startRoom} disabled={loading || !sessionToken}>
-                {loading && step === "room" ? "Creating…" : "Create Room"}
+                {loading && step === "auth" ? "Signing…" : "Sign & Enter Lobby"}
               </button>
             )
           }
