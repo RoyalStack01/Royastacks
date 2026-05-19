@@ -12,7 +12,7 @@ export default function Home() {
         }}
       >
         <Link
-          href="/tablescreen"
+          href="/game"
           style={{
             borderRadius: 999,
             padding: "12px 22px",

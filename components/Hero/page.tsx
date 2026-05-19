@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import Navbar from "./Navbar";
+import { useRouter } from "next/navigation";
 
 export default function RoyalStacksHero() {
   const [glitch, setGlitch] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const g = setInterval(() => {
@@ -12,6 +14,10 @@ export default function RoyalStacksHero() {
     }, 5000);
     return () => clearInterval(g);
   }, []);
+
+  const handlePlayPoker = () => {
+    router.push("/game");
+  };
 
   return (
     <>
@@ -633,7 +639,7 @@ export default function RoyalStacksHero() {
               </p>
 
               <div className="btn-row">
-                <button className="btn-primary">Play Poker Now</button>
+                <button className="btn-primary" onClick={handlePlayPoker}>Play Poker Now</button>
                 <button className="btn-ghost">How It Works</button>
               </div>
 

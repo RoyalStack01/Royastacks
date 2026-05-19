@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import RoyalStackLogo from "./RoyalStackLogo";
+import CommunityCardDisplay from "./CommunityCardDisplay";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Suit = "spades" | "hearts" | "diamonds" | "clubs";
@@ -22,6 +24,20 @@ const CRIMSON = "#E8003A";
 const WHITE = "#FFFFFF";
 const BLACK = "#0A0A0A";
 
+// Distribute 5 players evenly around an ellipse (table)
+function getPlayerPosition(index: number, total: number) {
+  // Ellipse center (50,50), radii
+  const rx = 38; // horizontal radius
+  const ry = 32; // vertical radius
+  const angle = (2 * Math.PI * index) / total - Math.PI / 2;
+  const x = 50 + rx * Math.cos(angle);
+  const y = 50 + ry * Math.sin(angle);
+  let anchor = "center";
+  if (x < 40) anchor = "left";
+  else if (x > 60) anchor = "right";
+  return { x, y, anchor };
+}
+
 const DEFAULT_PLAYERS: Player[] = [
   {
     id: 1,
@@ -35,7 +51,7 @@ const DEFAULT_PLAYERS: Player[] = [
     isActive: true,
     isDealer: false,
     isFolded: false,
-    position: { x: 50, y: 88, anchor: "center" },
+    position: getPlayerPosition(0, 5),
   },
   {
     id: 2,
@@ -49,7 +65,7 @@ const DEFAULT_PLAYERS: Player[] = [
     isActive: true,
     isDealer: false,
     isFolded: false,
-    position: { x: 78, y: 62, anchor: "right" },
+    position: getPlayerPosition(1, 5),
   },
   {
     id: 3,
@@ -63,7 +79,7 @@ const DEFAULT_PLAYERS: Player[] = [
     isActive: true,
     isDealer: true,
     isFolded: false,
-    position: { x: 50, y: 12, anchor: "center" },
+    position: getPlayerPosition(2, 5),
   },
   {
     id: 4,
@@ -77,7 +93,7 @@ const DEFAULT_PLAYERS: Player[] = [
     isActive: true,
     isDealer: false,
     isFolded: false,
-    position: { x: 88, y: 38, anchor: "right" },
+    position: getPlayerPosition(3, 5),
   },
   {
     id: 5,
@@ -91,7 +107,7 @@ const DEFAULT_PLAYERS: Player[] = [
     isActive: true,
     isDealer: false,
     isFolded: false,
-    position: { x: 12, y: 38, anchor: "left" },
+    position: getPlayerPosition(4, 5),
   },
 ];
 
@@ -574,7 +590,7 @@ function RoyalStackWatermark() {
         alignItems: "center",
         justifyContent: "center",
         pointerEvents: "none",
-        zIndex: 1,
+        zIndex: 50,
       }}
     >
       <div
@@ -650,12 +666,13 @@ function PlayerSeat({
 
   const isHuman = player.id === HUMAN_PLAYER_ID;
 
+  // Larger cards for visibility
   const cardRow = (
-    <div style={{ display: "flex", gap: 3, justifyContent: alignH }}>
+    <div style={{ display: "flex", gap: 6, justifyContent: alignH }}>
       {player.isFolded ? (
         <span
           style={{
-            fontSize: 9,
+            fontSize: 12,
             color: "#ff4466",
             fontFamily: "Georgia,serif",
             opacity: 0.7,
@@ -671,9 +688,9 @@ function PlayerSeat({
               style={{ transform: i === 0 ? "rotate(-3deg)" : "rotate(3deg)" }}
             >
               {isHuman ? (
-                <CardFront card={c} width={28} height={40} />
+                <CardFront card={c} width={48} height={68} />
               ) : (
-                <CardBack width={28} height={40} />
+                <CardBack width={48} height={68} />
               )}
             </div>
           ) : null,
@@ -682,18 +699,14 @@ function PlayerSeat({
     </div>
   );
 
+  // Player details beside cards
   return (
     <div
       style={{
         display: "flex",
-        flexDirection: "column",
-        alignItems:
-          alignH === "flex-start"
-            ? "flex-start"
-            : alignH === "flex-end"
-              ? "flex-end"
-              : "center",
-        gap: 4,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
         opacity: player.isFolded ? 0.45 : 1,
         transition: "opacity 0.3s",
       }}
@@ -706,12 +719,12 @@ function PlayerSeat({
             : "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
           border: `1.5px solid ${isCurrentTurn ? CRIMSON : "rgba(255,255,255,0.18)"}`,
           borderRadius: 10,
-          padding: "5px 10px",
+          padding: "8px 16px",
           backdropFilter: "blur(8px)",
           boxShadow: isCurrentTurn
             ? `0 0 18px ${CRIMSON}88, 0 2px 8px rgba(0,0,0,0.6)`
             : "0 2px 8px rgba(0,0,0,0.5)",
-          minWidth: 90,
+          minWidth: 110,
           textAlign: "center",
           transition: "all 0.3s",
         }}
@@ -719,11 +732,11 @@ function PlayerSeat({
         {player.isDealer && (
           <div
             style={{
-              fontSize: 8,
+              fontSize: 10,
               color: CRIMSON,
               fontFamily: "Georgia,serif",
               letterSpacing: 1,
-              marginBottom: 1,
+              marginBottom: 2,
             }}
           >
             ♦ DEALER ♦
@@ -733,7 +746,7 @@ function PlayerSeat({
           style={{
             color: WHITE,
             fontFamily: "Poppins, Georgia, 'Times New Roman', serif",
-            fontSize: 14,
+            fontSize: 16,
             fontWeight: 800,
             letterSpacing: 0.6,
           }}
@@ -744,7 +757,7 @@ function PlayerSeat({
           style={{
             color: isCurrentTurn ? WHITE : "#ddd",
             fontFamily: "monospace",
-            fontSize: 12,
+            fontSize: 14,
             marginTop: 2,
           }}
         >
@@ -754,7 +767,7 @@ function PlayerSeat({
           <div
             style={{
               marginTop: 3,
-              fontSize: 9,
+              fontSize: 11,
               color: "#c70052",
               fontFamily: "monospace",
             }}
@@ -827,6 +840,8 @@ function Pot({ amount }: { amount: number }) {
 
 // ─── Main Table ───────────────────────────────────────────────────────────────
 export default function PokerTable() {
+    const [winner, setWinner] = useState<Player | null>(null);
+    const [showWinner, setShowWinner] = useState(false);
   const [players, setPlayers] = useState<Player[]>(DEFAULT_PLAYERS);
   const [dealerId, setDealerId] = useState<number>(
     DEFAULT_PLAYERS.find((player) => player.isDealer)?.id ??
@@ -862,12 +877,14 @@ export default function PokerTable() {
         ? "Your turn"
         : `${currentPlayer?.name ?? "Waiting"} is acting...`;
 
-  const communityRevealed = communityCards.map((_, index) => {
-    if (phase === "preflop") return false;
-    if (phase === "flop") return index < 3;
-    if (phase === "turn") return index < 4;
-    return index < 5;
-  });
+  // Always show 5 community card slots for visibility
+  // Always show 5 community card slots for visibility (show demo cards if empty)
+  const visibleCommunity = communityCards.length === 0
+    ? DEFAULT_COMMUNITY_CARDS
+    : communityCards.concat(Array(5 - communityCards.length).fill(null)).slice(0, 5);
+
+  // For demo/UX: always reveal community cards so they're always visible
+  const communityRevealed = visibleCommunity.map((card) => !!card);
 
   const addLog = (entry: string) => {
     setActionLog((prev) => [...prev.slice(-4), entry]);
@@ -947,6 +964,14 @@ export default function PokerTable() {
     setPlayers(updated);
     setPhase("roundEnd");
     setCurrentTurn(null);
+    if (winners.length === 1) {
+      setWinner(winners[0]);
+      setShowWinner(true);
+      setTimeout(() => setShowWinner(false), 3500);
+    } else {
+      setWinner(null);
+      setShowWinner(false);
+    }
     addLog(
       winners.length === 1
         ? `${winners[0].name} wins ${formatMoney(pot)}.`
@@ -1146,6 +1171,78 @@ export default function PokerTable() {
         overflow: "hidden",
       }}
     >
+      {/* Winner animation overlay */}
+      {showWinner && winner && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+            animation: "winnerFadeIn 0.5s",
+          }}
+        >
+          <div
+            style={{
+              background: `linear-gradient(135deg, ${CRIMSON}, #9e0028 80%)`,
+              borderRadius: 24,
+              padding: "48px 64px",
+              boxShadow: `0 0 60px ${CRIMSON}cc, 0 2px 24px #000`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              animation: "winnerPop 0.7s cubic-bezier(.68,-0.55,.27,1.55)",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 32,
+                color: WHITE,
+                fontWeight: 900,
+                letterSpacing: 2,
+                textShadow: `0 0 18px #fff, 0 0 40px ${CRIMSON}`,
+                marginBottom: 12,
+                animation: "winnerTextGlow 1.2s infinite alternate",
+              }}
+            >
+              🎉 {winner.name} Wins! 🎉
+            </span>
+            <span
+              style={{
+                fontSize: 20,
+                color: WHITE,
+                fontWeight: 700,
+                marginBottom: 8,
+                textShadow: `0 0 10px #fff`,
+              }}
+            >
+              🏆 Congratulations! 🏆
+            </span>
+          </div>
+          <style>{`
+            @keyframes winnerFadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes winnerPop {
+              0% { transform: scale(0.7); }
+              80% { transform: scale(1.1); }
+              100% { transform: scale(1); }
+            }
+            @keyframes winnerTextGlow {
+              from { text-shadow: 0 0 18px #fff, 0 0 40px ${CRIMSON}; }
+              to { text-shadow: 0 0 30px #fff, 0 0 80px ${CRIMSON}; }
+            }
+          `}</style>
+        </div>
+      )}
       {/* Outer ambient glow */}
       <div
         style={{
@@ -1164,24 +1261,26 @@ export default function PokerTable() {
           height: "min(72vh, 520px)",
         }}
       >
-        {/* Table felt */}
+        {/* Table felt - improved design */}
         <div
           style={{
             position: "absolute",
-            left: "10%",
-            right: "10%",
-            top: "12%",
-            bottom: "12%",
+            left: "8%",
+            right: "8%",
+            top: "10%",
+            bottom: "10%",
             borderRadius: "50%",
-            background: `radial-gradient(ellipse at 40% 40%, #0d3320, #072213 60%, #050f0a)`,
-            border: `6px solid #1a0008`,
+            background: `radial-gradient(ellipse at 50% 40%, #1b3a2a 0%, #0d3320 60%, #072213 90%, #050f0a 100%)`,
+            border: `8px solid #2a0a18`,
             boxShadow: `
-            0 0 0 3px ${CRIMSON}55,
-            0 0 40px rgba(0,0,0,0.9),
-            inset 0 0 60px rgba(0,0,0,0.5),
-            inset 0 0 120px rgba(0,0,0,0.3)
-          `,
+              0 0 0 6px ${CRIMSON}44,
+              0 0 60px 10px #000a,
+              0 0 120px 0px ${CRIMSON}22,
+              inset 0 0 80px #0008,
+              inset 0 0 180px #0006
+            `,
             overflow: "hidden",
+            filter: "drop-shadow(0 0 40px #e8003a33)",
           }}
         >
           {/* Felt texture overlay */}
@@ -1208,9 +1307,12 @@ export default function PokerTable() {
               pointerEvents: "none",
             }}
           />
-          {/* Watermark */}
-          <RoyalStackWatermark />
-          {/* Community cards + pot */}
+          {/* New RoyalStack logo at center */}
+          <RoyalStackLogo style={{ position: "absolute", top: "18%", left: "50%", transform: "translate(-50%, 0)", zIndex: 200 }} />
+          {/* New CommunityCardDisplay at center */}
+          <CommunityCardDisplay cards={visibleCommunity} />
+
+          {/* Pot, info, and phase badge below community cards */}
           <div
             style={{
               position: "absolute",
@@ -1239,17 +1341,6 @@ export default function PokerTable() {
             >
               {phase}
             </div>
-            {/* Community cards */}
-            <div style={{ display: "flex", gap: 6 }}>
-              {communityCards.map((card, i) => (
-                <CommunityCard
-                  key={i}
-                  card={card}
-                  revealed={communityRevealed[i]}
-                />
-              ))}
-            </div>
-            {/* Pot */}
             <Pot amount={pot} />
             <div
               style={{
