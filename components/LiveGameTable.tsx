@@ -159,7 +159,14 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
   const refreshCount = (token: string, pid: string) => {
     getPool(token, pid)
-      .then(pool => { if (typeof pool.playerCount === "number") setPlayerCount(pool.playerCount); })
+      .then(pool => {
+        if (pool.status === 'CLOSED') {
+          addLog("Pool was cancelled. Returning to lobby...");
+          setTimeout(() => router.push("/"), 2000);
+          return;
+        }
+        if (typeof pool.playerCount === "number") setPlayerCount(pool.playerCount);
+      })
       .catch(() => {});
   };
 
@@ -177,7 +184,10 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       refreshCount(sessionToken, poolId);
     });
 
-    socket.on("disconnect", () => setConnected(false));
+    socket.on("disconnect", () => {
+      setConnected(false);
+      joinedRef.current = false; // server lost our room on restart, re-join on next connect
+    });
 
     socket.on("POOL_JOINED", () => addLog("Joined the pool. Waiting for players..."));
 
