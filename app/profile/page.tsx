@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getPlayerStats, getLeaderboard } from "../../lib/server";
+import { walletEmoji } from "../../lib/avatar";
 
 const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
@@ -51,14 +52,14 @@ export default function ProfilePage() {
   async function fetchData(t: string, w: string) {
     try {
       const [statsData, board] = await Promise.all([
-        getPlayerStats(t, w),
-        getLeaderboard(t, 100),
+        getPlayerStats(t, w).catch(() => null),
+        getLeaderboard(t, 100).catch(() => []),
       ]);
       setStats(statsData);
-      const pos = board.findIndex(e => e.playerId?.toLowerCase() === w.toLowerCase());
+      const pos = (board as any[]).findIndex(e => e.playerId?.toLowerCase() === w.toLowerCase());
       if (pos !== -1) setRank(pos + 1);
     } catch (e: any) {
-      setError(e.message ?? "Failed to load profile");
+      // silently fail — stats show as zeros until tables exist
     } finally {
       setLoading(false);
     }
@@ -141,18 +142,17 @@ export default function ProfilePage() {
           flex-wrap: wrap;
         }
         .pr-avatar {
-          width: 64px;
-          height: 64px;
+          width: 72px;
+          height: 72px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #FF0A54, #7b0030);
+          background: rgba(255,10,84,0.1);
+          border: 2px solid rgba(255,10,84,0.3);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-family: 'Audiowide', sans-serif;
-          font-size: 20px;
-          color: #fff;
+          font-size: 36px;
           flex-shrink: 0;
-          box-shadow: 0 0 24px rgba(255,10,84,0.3);
+          box-shadow: 0 0 24px rgba(255,10,84,0.2);
         }
         .pr-hero-info { flex: 1; min-width: 180px; }
         .pr-hero-eyebrow {
@@ -342,12 +342,11 @@ export default function ProfilePage() {
         </div>
 
         <main className="pr-main">
-          {error && <div className="pr-error">{error}</div>}
 
           {/* Hero card */}
           <div className="pr-hero">
             <div className="pr-avatar">
-              {wallet ? wallet[2].toUpperCase() : "?"}
+              {walletEmoji(wallet)}
             </div>
             <div className="pr-hero-info">
               <div className="pr-hero-eyebrow">Wallet Address</div>
