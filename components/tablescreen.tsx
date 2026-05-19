@@ -16,6 +16,7 @@ type Player = {
   isDealer: boolean;
   isFolded: boolean;
   position: { x: number; y: number; anchor: string };
+  lastAction?: string;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -197,7 +198,11 @@ function getActivePlayers(players: Player[]) {
 }
 
 function resetPlayerBets(players: Player[]) {
-  return players.map((player) => ({ ...player, bet: 0 }));
+  return players.map((player) => ({
+    ...player,
+    bet: 0,
+    lastAction: undefined,
+  }));
 }
 
 function hasAllActivePlayersMatched(players: Player[], currentBet: number) {
@@ -731,67 +736,95 @@ function PlayerSeat({
       }}
     >
       {cardRow}
-      <div
-        style={{
-          background: isCurrentTurn
-            ? `linear-gradient(135deg, ${CRIMSON}, #9e0028)`
-            : "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
-          border: `1.5px solid ${isCurrentTurn ? CRIMSON : "rgba(255,255,255,0.18)"}`,
-          borderRadius: 10,
-          padding: "8px 16px",
-          backdropFilter: "blur(8px)",
-          boxShadow: isCurrentTurn
-            ? `0 0 18px ${CRIMSON}88, 0 2px 8px rgba(0,0,0,0.6)`
-            : "0 2px 8px rgba(0,0,0,0.5)",
-          minWidth: 110,
-          textAlign: "center",
-          transition: "all 0.3s",
-        }}
-      >
-        {player.isDealer && (
+      <div style={{ position: "relative" }}>
+        <div
+          style={{
+            background: isCurrentTurn
+              ? `linear-gradient(135deg, ${CRIMSON}, #9e0028)`
+              : "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))",
+            border: `1.5px solid ${isCurrentTurn ? CRIMSON : "rgba(255,255,255,0.18)"}`,
+            borderRadius: 10,
+            padding: "8px 16px",
+            backdropFilter: "blur(8px)",
+            boxShadow: isCurrentTurn
+              ? `0 0 18px ${CRIMSON}88, 0 2px 8px rgba(0,0,0,0.6)`
+              : "0 2px 8px rgba(0,0,0,0.5)",
+            minWidth: 110,
+            textAlign: "center",
+            transition: "all 0.3s",
+          }}
+        >
+          {player.isDealer && (
+            <div
+              style={{
+                fontSize: 10,
+                color: CRIMSON,
+                fontFamily: "Georgia,serif",
+                letterSpacing: 1,
+                marginBottom: 2,
+              }}
+            >
+              ♦ DEALER ♦
+            </div>
+          )}
           <div
             style={{
-              fontSize: 10,
-              color: CRIMSON,
-              fontFamily: "Georgia,serif",
-              letterSpacing: 1,
-              marginBottom: 2,
+              color: WHITE,
+              fontFamily: "Poppins, Georgia, 'Times New Roman', serif",
+              fontSize: 16,
+              fontWeight: 800,
+              letterSpacing: 0.6,
             }}
           >
-            ♦ DEALER ♦
+            {player.name}
           </div>
-        )}
-        <div
-          style={{
-            color: WHITE,
-            fontFamily: "Poppins, Georgia, 'Times New Roman', serif",
-            fontSize: 16,
-            fontWeight: 800,
-            letterSpacing: 0.6,
-          }}
-        >
-          {player.name}
-        </div>
-        <div
-          style={{
-            color: isCurrentTurn ? WHITE : "#ddd",
-            fontFamily: "monospace",
-            fontSize: 14,
-            marginTop: 2,
-          }}
-        >
-          ${player.chips.toLocaleString()}
-        </div>
-        {player.bet > 0 && (
           <div
             style={{
-              marginTop: 3,
-              fontSize: 11,
-              color: "#c70052",
+              color: isCurrentTurn ? WHITE : "#ddd",
               fontFamily: "monospace",
+              fontSize: 14,
+              marginTop: 2,
             }}
           >
-            bet ${player.bet}
+            ${player.chips.toLocaleString()}
+          </div>
+          {player.bet > 0 && (
+            <div
+              style={{
+                marginTop: 3,
+                fontSize: 11,
+                color: "#c70052",
+                fontFamily: "monospace",
+              }}
+            >
+              bet ${player.bet}
+            </div>
+          )}
+        </div>
+
+        {/* Action Bubble */}
+        {(player.lastAction || isCurrentTurn) && !player.isFolded && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              marginBottom: 8,
+              background: "rgba(0,0,0,0.85)",
+              border: `1px solid ${isCurrentTurn ? CRIMSON : "rgba(255,255,255,0.2)"}`,
+              borderRadius: 6,
+              padding: "4px 10px",
+              color: isCurrentTurn ? "#ffcccc" : WHITE,
+              fontFamily: "monospace",
+              fontSize: 11,
+              whiteSpace: "nowrap",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+              zIndex: 50,
+              pointerEvents: "none",
+            }}
+          >
+            {isCurrentTurn ? "Thinking..." : player.lastAction}
           </div>
         )}
       </div>
@@ -859,8 +892,8 @@ function Pot({ amount }: { amount: number }) {
 
 // ─── Main Table ───────────────────────────────────────────────────────────────
 export default function PokerTable() {
-    const [winner, setWinner] = useState<Player | null>(null);
-    const [showWinner, setShowWinner] = useState(false);
+  const [winner, setWinner] = useState<Player | null>(null);
+  const [showWinner, setShowWinner] = useState(false);
   const [players, setPlayers] = useState<Player[]>(DEFAULT_PLAYERS);
   const [dealerId, setDealerId] = useState<number>(
     DEFAULT_PLAYERS.find((player) => player.isDealer)?.id ??
@@ -873,6 +906,8 @@ export default function PokerTable() {
   const [deck, setDeck] = useState<CardFace[]>([]);
   const [currentBet, setCurrentBet] = useState(0);
   const [phaseTurnStarter, setPhaseTurnStarter] = useState<number | null>(null);
+  const [raiseValue, setRaiseValue] = useState<number>(0);
+  const [isRaising, setIsRaising] = useState(false);
   const [actionLog, setActionLog] = useState<string[]>([
     "Press DEAL to start a new hand.",
   ]);
@@ -896,11 +931,10 @@ export default function PokerTable() {
         ? "Your turn"
         : `${currentPlayer?.name ?? "Waiting"} is acting...`;
 
-  // Always show 5 community card slots for visibility
-  // Always show 5 community card slots for visibility (show demo cards if empty)
-  const visibleCommunity = communityCards.length === 0
-    ? DEFAULT_COMMUNITY_CARDS
-    : communityCards.concat(Array(5 - communityCards.length).fill(null)).slice(0, 5);
+  // Always show 5 community card slots, populated with actual dealt cards
+  const visibleCommunity = communityCards
+    .concat(Array(5 - communityCards.length).fill(null))
+    .slice(0, 5);
 
   // For demo/UX: always reveal community cards so they're always visible
   const communityRevealed = visibleCommunity.map((card) => !!card);
@@ -922,6 +956,7 @@ export default function PokerTable() {
       bet: 0,
       cards: [null, null],
       isDealer: player.id === nextDealer,
+      lastAction: undefined,
     }));
 
     const deckCopy = [...freshDeck];
@@ -1071,7 +1106,10 @@ export default function PokerTable() {
     }
   }
 
-  function handlePlayerAction(action: "fold" | "call" | "check" | "raise") {
+  function handlePlayerAction(
+    action: "fold" | "call" | "check" | "raise",
+    amount?: number,
+  ) {
     if (phase === "roundEnd" || currentTurn === null) return;
 
     const player = players.find((entry) => entry.id === currentTurn);
@@ -1086,7 +1124,10 @@ export default function PokerTable() {
 
     if (action === "fold") {
       updatedPlayers.forEach((entry) => {
-        if (entry.id === player.id) entry.isFolded = true;
+        if (entry.id === player.id) {
+          entry.isFolded = true;
+          entry.lastAction = "Fold";
+        }
       });
       message = `${player.name} folds.`;
     } else if (action === "call") {
@@ -1095,21 +1136,26 @@ export default function PokerTable() {
         if (entry.id === player.id) {
           entry.chips -= amount;
           entry.bet += amount;
+          entry.lastAction =
+            amount > 0 ? `Call ${formatMoney(amount)}` : "Call";
         }
       });
       updatedPot += amount;
       message = `${player.name} calls ${formatMoney(amount)}.`;
     } else if (action === "check") {
+      updatedPlayers.forEach((entry) => {
+        if (entry.id === player.id) entry.lastAction = "Check";
+      });
       message = `${player.name} checks.`;
     } else if (action === "raise") {
-      const raiseAmount = Math.min(
-        player.chips,
-        Math.max(BLINDS.big, callAmount + BLINDS.big),
-      );
+      const raiseAmount =
+        amount ??
+        Math.min(player.chips, Math.max(BLINDS.big, callAmount + BLINDS.big));
       updatedPlayers.forEach((entry) => {
         if (entry.id === player.id) {
           entry.chips -= raiseAmount;
           entry.bet += raiseAmount;
+          entry.lastAction = `Raise to ${formatMoney(entry.bet)}`;
         }
       });
       updatedPot += raiseAmount;
@@ -1327,11 +1373,48 @@ export default function PokerTable() {
             }}
           />
           {/* New RoyalStack logo at center */}
-          <RoyalStackLogo style={{ position: "absolute", top: "18%", left: "50%", transform: "translate(-50%, 0)", zIndex: 200 }} />
-          {/* Community cards (centralized) */}
-          <div style={{ position: "absolute", top: "38%", left: "50%", transform: "translate(-50%, -50%)", display: "flex", gap: 10, zIndex: 200, pointerEvents: "none" }}>
+          <RoyalStackLogo
+            style={{
+              position: "absolute",
+              top: "18%",
+              left: "50%",
+              transform: "translate(-50%, 0)",
+              zIndex: 200,
+            }}
+          />
+          {/* Community Cards at center using SVG CardFront */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              zIndex: 200,
+              position: "absolute",
+              top: "38%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              pointerEvents: "none",
+            }}
+          >
             {visibleCommunity.map((card, i) => (
-              <CommunityCard key={i} card={card ?? undefined} revealed={communityRevealed[i]} />
+              <div key={i}>
+                {card ? (
+                  <CardFront card={card} width={48} height={68} />
+                ) : (
+                  <div
+                    style={{
+                      width: 48,
+                      height: 68,
+                      opacity: 0.18,
+                      background: "#222",
+                      borderRadius: 4,
+                      boxShadow: "inset 0 0 10px #000",
+                    }}
+                  />
+                )}
+              </div>
             ))}
           </div>
 
@@ -1339,7 +1422,7 @@ export default function PokerTable() {
           <div
             style={{
               position: "absolute",
-              top: "50%",
+              top: "72%",
               left: "50%",
               transform: "translate(-50%, -50%)",
               display: "flex",
@@ -1367,28 +1450,35 @@ export default function PokerTable() {
             <Pot amount={pot} />
             <div
               style={{
-                marginTop: 10,
-                color: "#ccc",
-                fontSize: 11,
-                textAlign: "center",
-                maxWidth: 360,
-                lineHeight: 1.4,
+                marginTop: 6,
+                display: "flex",
+                justifyContent: "center",
               }}
             >
-              <div style={{ marginBottom: 6, color: "#fff", fontWeight: 700 }}>
-                {currentLabel}
-              </div>
-              {phase !== "roundEnd" && (
-                <div style={{ marginBottom: 6 }}>
-                  {activePlayers.length} players in · Pot {formatMoney(pot)} ·
-                  Current bet {formatMoney(currentBet)}
+              {phase !== "roundEnd" && currentBet > 0 && (
+                <div
+                  style={{
+                    background: "rgba(232, 0, 58, 0.15)",
+                    border: `1px solid rgba(232, 0, 58, 0.4)`,
+                    borderRadius: 12,
+                    padding: "4px 14px",
+                    color: "#ffcccc",
+                    fontFamily: "monospace",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: 0.5,
+                    boxShadow: "0 2px 12px rgba(232, 0, 58, 0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ opacity: 0.85 }}>Current Bet</span>
+                  <span style={{ color: WHITE, fontSize: 13, fontWeight: 800 }}>
+                    {formatMoney(currentBet)}
+                  </span>
                 </div>
               )}
-              <div style={{ opacity: 0.85, color: "#ddd" }}>
-                {actionLog.map((entry, index) => (
-                  <div key={index}>{entry}</div>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -1403,14 +1493,12 @@ export default function PokerTable() {
             bottom: "10%",
             borderRadius: "50%",
             border: `10px solid transparent`,
-            backgroundImage: `
-            linear-gradient(${BLACK}, ${BLACK}),
-            linear-gradient(135deg, #3a0010, #1a0008, #3a0010, #1a0008)
-          `,
-            backgroundOrigin: "border-box",
-            backgroundClip: "padding-box, border-box",
+            background: `linear-gradient(135deg, #3a0010, #1a0008, #3a0010, #1a0008) border-box`,
+            WebkitMask: `linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0)`,
+            WebkitMaskComposite: "destination-out",
+            maskComposite: "exclude",
             pointerEvents: "none",
-            zIndex: 0,
+            zIndex: 10,
           }}
         />
 
@@ -1467,69 +1555,153 @@ export default function PokerTable() {
               DEAL NEW HAND
             </button>
           ) : isHumanTurn ? (
-            <>
-              <button
+            isRaising ? (
+              <div
                 style={{
-                  background:
-                    "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  borderRadius: 8,
-                  color: WHITE,
-                  fontFamily: "Georgia, serif",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  padding: "8px 14px",
-                  cursor: "pointer",
-                  backdropFilter: "blur(8px)",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                  background: "rgba(0,0,0,0.65)",
+                  padding: "16px 24px",
+                  borderRadius: 16,
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255,255,255,0.1)",
                 }}
-                onClick={() => handlePlayerAction("fold")}
               >
-                FOLD
-              </button>
-              <button
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  borderRadius: 8,
-                  color: WHITE,
-                  fontFamily: "Georgia, serif",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  padding: "8px 14px",
-                  cursor: "pointer",
-                  backdropFilter: "blur(8px)",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
-                }}
-                onClick={() =>
-                  handlePlayerAction(callAmount > 0 ? "call" : "check")
-                }
-              >
-                {callAmount > 0 ? `CALL ${formatMoney(callAmount)}` : "CHECK"}
-              </button>
-              <button
-                style={{
-                  background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`,
-                  border: `1px solid ${CRIMSON}`,
-                  borderRadius: 8,
-                  color: WHITE,
-                  fontFamily: "Georgia, serif",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  padding: "8px 14px",
-                  cursor: "pointer",
-                  backdropFilter: "blur(8px)",
-                  boxShadow: `0 0 14px ${CRIMSON}66, 0 2px 8px rgba(0,0,0,0.5)`,
-                }}
-                onClick={() => handlePlayerAction("raise")}
-              >
-                RAISE
-              </button>
-            </>
+                <div
+                  style={{
+                    color: WHITE,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    fontFamily: "monospace",
+                  }}
+                >
+                  RAISE TO ${raiseValue.toLocaleString()}
+                </div>
+                <input
+                  type="range"
+                  min={Math.max(BLINDS.big, callAmount + BLINDS.big)}
+                  max={Math.max(
+                    Math.max(BLINDS.big, callAmount + BLINDS.big),
+                    Math.min(...activePlayers.map((p) => p.chips)),
+                  )}
+                  step={10}
+                  value={raiseValue}
+                  onChange={(e) => setRaiseValue(Number(e.target.value))}
+                  style={{ width: 200, accentColor: CRIMSON }}
+                />
+                <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                  <button
+                    style={{
+                      background: "rgba(255,255,255,0.1)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: 8,
+                      color: WHITE,
+                      padding: "8px 16px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                    onClick={() => setIsRaising(false)}
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    style={{
+                      background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`,
+                      border: `1px solid ${CRIMSON}`,
+                      borderRadius: 8,
+                      color: WHITE,
+                      padding: "8px 16px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: `0 0 14px ${CRIMSON}66`,
+                    }}
+                    onClick={() => {
+                      handlePlayerAction("raise", raiseValue);
+                      setIsRaising(false);
+                    }}
+                  >
+                    CONFIRM
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 8,
+                    color: WHITE,
+                    fontFamily: "Georgia, serif",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    padding: "8px 14px",
+                    cursor: "pointer",
+                    backdropFilter: "blur(8px)",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                  }}
+                  onClick={() => handlePlayerAction("fold")}
+                >
+                  FOLD
+                </button>
+                <button
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 8,
+                    color: WHITE,
+                    fontFamily: "Georgia, serif",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    padding: "8px 14px",
+                    cursor: "pointer",
+                    backdropFilter: "blur(8px)",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                  }}
+                  onClick={() =>
+                    handlePlayerAction(callAmount > 0 ? "call" : "check")
+                  }
+                >
+                  {callAmount > 0 ? `CALL ${formatMoney(callAmount)}` : "CHECK"}
+                </button>
+                <button
+                  style={{
+                    background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`,
+                    border: `1px solid ${CRIMSON}`,
+                    borderRadius: 8,
+                    color: WHITE,
+                    fontFamily: "Georgia, serif",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    padding: "8px 14px",
+                    cursor: "pointer",
+                    backdropFilter: "blur(8px)",
+                    boxShadow: `0 0 14px ${CRIMSON}66, 0 2px 8px rgba(0,0,0,0.5)`,
+                  }}
+                  onClick={() => {
+                    const minRaise = Math.max(
+                      BLINDS.big,
+                      callAmount + BLINDS.big,
+                    );
+                    setRaiseValue(
+                      Math.min(minRaise, currentPlayer?.chips ?? 0),
+                    );
+                    setIsRaising(true);
+                  }}
+                >
+                  RAISE
+                </button>
+              </>
+            )
           ) : (
             <button
               disabled
