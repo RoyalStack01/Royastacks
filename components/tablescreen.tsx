@@ -377,7 +377,7 @@ function determineWinners(players: Player[], community: CardFace[]): Player[] {
 // ─── SVG Suit Icons ───────────────────────────────────────────────────────────
 function SuitIcon({
   suit,
-  size = 14,
+  size = 9.8,
   color,
 }: {
   suit: Suit;
@@ -470,16 +470,16 @@ function CardBack({
       />
       <g transform="translate(19,27)" opacity="0.75">
         <g transform="translate(-7,-7)">
-          <SuitIcon suit="spades" size={9} color={WHITE} />
+          <SuitIcon suit="spades" size={6.3} color={WHITE} />
         </g>
         <g transform="translate(1,-7)">
-          <SuitIcon suit="hearts" size={9} color={CRIMSON} />
+          <SuitIcon suit="hearts" size={6.3} color={CRIMSON} />
         </g>
         <g transform="translate(-7,1)">
-          <SuitIcon suit="diamonds" size={9} color={CRIMSON} />
+          <SuitIcon suit="diamonds" size={6.3} color={CRIMSON} />
         </g>
         <g transform="translate(1,1)">
-          <SuitIcon suit="clubs" size={9} color={WHITE} />
+          <SuitIcon suit="clubs" size={6.3} color={WHITE} />
         </g>
       </g>
     </svg>
@@ -499,8 +499,8 @@ function CardFront({
   const isRed = card.suit === "hearts" || card.suit === "diamonds";
   const suitColor = isRed ? CRIMSON : BLACK;
   const cornerRankSize = 14;
-  const cornerSuitSize = 12;
-  const centerSuitSize = 26;
+  const cornerSuitSize = 8.4;
+  const centerSuitSize = 18.2;
 
   return (
     <svg
@@ -536,7 +536,9 @@ function CardFront({
       </g>
 
       {/* center suit */}
-      <g transform={`translate(${38 / 2 - 13},${54 / 2 - 13})`}>
+      <g
+        transform={`translate(${38 / 2 - centerSuitSize / 2},${54 / 2 - centerSuitSize / 2})`}
+      >
         <SuitIcon suit={card.suit} size={centerSuitSize} color={suitColor} />
       </g>
 
@@ -635,10 +637,10 @@ function RoyalStackWatermark() {
             marginBottom: 8,
           }}
         >
-          <SuitIcon suit="spades" size={39} color={WHITE} />
-          <SuitIcon suit="hearts" size={39} color={CRIMSON} />
-          <SuitIcon suit="diamonds" size={39} color={CRIMSON} />
-          <SuitIcon suit="clubs" size={39} color={WHITE} />
+          <SuitIcon suit="spades" size={27.3} color={WHITE} />
+          <SuitIcon suit="hearts" size={27.3} color={CRIMSON} />
+          <SuitIcon suit="diamonds" size={27.3} color={CRIMSON} />
+          <SuitIcon suit="clubs" size={27.3} color={WHITE} />
         </div>
         <div
           style={{
@@ -1747,10 +1749,10 @@ export default function PokerTable() {
                 gap: 2,
               }}
             >
-              <SuitIcon suit="spades" size={10} color={WHITE} />
-              <SuitIcon suit="hearts" size={10} color={CRIMSON} />
-              <SuitIcon suit="diamonds" size={10} color={CRIMSON} />
-              <SuitIcon suit="clubs" size={10} color={WHITE} />
+              <SuitIcon suit="spades" size={7} color={WHITE} />
+              <SuitIcon suit="hearts" size={7} color={CRIMSON} />
+              <SuitIcon suit="diamonds" size={7} color={CRIMSON} />
+              <SuitIcon suit="clubs" size={7} color={WHITE} />
             </div>
             <span
               style={{
