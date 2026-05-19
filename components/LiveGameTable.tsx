@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSocket, disconnectSocket, GameState, ServerPlayer } from "../lib/socket";
+import { getPool } from "../lib/server";
 import RoyalStackLogo from "./RoyalStackLogo";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ type Props = {
 export default function LiveGameTable({ sessionToken, poolId, walletAddress }: Props) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
-  const [playerCount, setPlayerCount] = useState<number>(1);
+  const [playerCount, setPlayerCount] = useState<number>(0);
   const [actionError, setActionError] = useState<string>("");
   const [log, setLog] = useState<string[]>([]);
   const [showWinner, setShowWinner] = useState(false);
@@ -157,9 +158,21 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     const socket = getSocket(sessionToken);
     socketRef.current = socket;
 
+    const joinPool = () => {
+      socket.emit("JOIN_POOL", { poolId });
+      getPool(sessionToken, poolId)
+        .then(pool => { if (typeof pool.playerCount === "number") setPlayerCount(pool.playerCount); })
+        .catch(() => {});
+    };
+
     socket.on("connect", () => {
       setConnected(true);
-      socket.emit("JOIN_POOL", { poolId });
+      joinPool();
+    });
+
+    socket.on("reconnect", () => {
+      setConnected(true);
+      joinPool();
     });
 
     socket.on("disconnect", () => setConnected(false));

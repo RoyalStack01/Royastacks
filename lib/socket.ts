@@ -24,6 +24,10 @@ export function getSocket(sessionToken: string): Socket {
   if (!_socket || !_socket.connected) {
     _socket = io(API_BASE_URL, {
       auth: { token: sessionToken },
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
     });
   }
   return _socket;
