@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import RoyalStackLogo from "./RoyalStackLogo";
-import CommunityCardDisplay from "./CommunityCardDisplay";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Suit = "spades" | "hearts" | "diamonds" | "clubs";
@@ -421,8 +420,8 @@ function SuitIcon({
 
 // ─── Card Back ────────────────────────────────────────────────────────────────
 function CardBack({
-  width = 38,
-  height = 54,
+  width = 50,
+  height = 70,
 }: {
   width?: number;
   height?: number;
@@ -433,24 +432,24 @@ function CardBack({
       width={width}
       height={height}
       viewBox="0 0 38 54"
-      style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.7))" }}
+      style={{ filter: "drop-shadow(0 3px 10px rgba(0,0,0,0.75))" }}
     >
       <defs>
         <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor={BLACK} />
-          <stop offset="50%" stopColor="#1a0008" />
+          <stop offset="55%" stopColor="#1a0008" />
           <stop offset="100%" stopColor={BLACK} />
         </linearGradient>
         <pattern
           id={`${id}-pat`}
           x="0"
           y="0"
-          width="6"
-          height="6"
+          width="8"
+          height="8"
           patternUnits="userSpaceOnUse"
         >
-          <rect width="6" height="6" fill="transparent" />
-          <path d="M0 3 L3 0 L6 3 L3 6 Z" fill={CRIMSON} fillOpacity="0.35" />
+          <rect width="8" height="8" fill="transparent" />
+          <path d="M0 4 L4 0 L8 4 L4 8 Z" fill={CRIMSON} fillOpacity="0.45" />
         </pattern>
       </defs>
       <rect rx="4" width="38" height="54" fill={`url(#${id}-bg)`} />
@@ -461,21 +460,21 @@ function CardBack({
         height="54"
         fill="none"
         stroke={CRIMSON}
-        strokeWidth="1.5"
-        strokeOpacity="0.7"
+        strokeWidth="2"
+        strokeOpacity="0.8"
       />
-      <g transform="translate(19,27)" opacity="0.6">
+      <g transform="translate(19,27)" opacity="0.75">
         <g transform="translate(-7,-7)">
-          <SuitIcon suit="spades" size={7} color={WHITE} />
+          <SuitIcon suit="spades" size={9} color={WHITE} />
         </g>
         <g transform="translate(1,-7)">
-          <SuitIcon suit="hearts" size={7} color={CRIMSON} />
+          <SuitIcon suit="hearts" size={9} color={CRIMSON} />
         </g>
         <g transform="translate(-7,1)">
-          <SuitIcon suit="diamonds" size={7} color={CRIMSON} />
+          <SuitIcon suit="diamonds" size={9} color={CRIMSON} />
         </g>
         <g transform="translate(1,1)">
-          <SuitIcon suit="clubs" size={7} color={WHITE} />
+          <SuitIcon suit="clubs" size={9} color={WHITE} />
         </g>
       </g>
     </svg>
@@ -485,8 +484,8 @@ function CardBack({
 // ─── Card Front ───────────────────────────────────────────────────────────────
 function CardFront({
   card,
-  width = 38,
-  height = 54,
+  width = 50,
+  height = 70,
 }: {
   card: CardFace;
   width?: number;
@@ -494,16 +493,16 @@ function CardFront({
 }) {
   const isRed = card.suit === "hearts" || card.suit === "diamonds";
   const suitColor = isRed ? CRIMSON : BLACK;
-  const cornerRankSize = 10;
-  const cornerSuitSize = 9;
-  const centerSuitSize = 20;
+  const cornerRankSize = 14;
+  const cornerSuitSize = 12;
+  const centerSuitSize = 26;
 
   return (
     <svg
       width={width}
       height={height}
       viewBox="0 0 38 54"
-      style={{ filter: "drop-shadow(0 2px 8px rgba(0,0,0,0.8))" }}
+      style={{ filter: "drop-shadow(0 3px 12px rgba(0,0,0,0.85))" }}
     >
       <rect rx="4" width="38" height="54" fill={WHITE} />
       <rect
@@ -511,27 +510,28 @@ function CardFront({
         width="38"
         height="54"
         fill="none"
-        stroke="#ddd"
-        strokeWidth="0.5"
+        stroke="#bbb"
+        strokeWidth="1"
       />
 
       {/* top-left rank + suit */}
       <text
         x="3"
-        y="12"
+        y="14"
         fontSize={cornerRankSize}
-        fontWeight="700"
+        fontWeight="800"
         fontFamily="Georgia,serif"
         fill={suitColor}
+        style={{ textShadow: "0 0 2px rgba(0,0,0,0.18)" }}
       >
         {card.rank}
       </text>
-      <g transform="translate(3,13)">
+      <g transform="translate(3,16)">
         <SuitIcon suit={card.suit} size={cornerSuitSize} color={suitColor} />
       </g>
 
       {/* center suit */}
-      <g transform={`translate(${38 / 2 - 9},${54 / 2 - 9})`}>
+      <g transform={`translate(${38 / 2 - 13},${54 / 2 - 13})`}>
         <SuitIcon suit={card.suit} size={centerSuitSize} color={suitColor} />
       </g>
 
@@ -539,15 +539,16 @@ function CardFront({
       <g transform="rotate(180,19,27)">
         <text
           x="3"
-          y="12"
+          y="14"
           fontSize={cornerRankSize}
-          fontWeight="700"
+          fontWeight="800"
           fontFamily="Georgia,serif"
           fill={suitColor}
+          style={{ textShadow: "0 0 2px rgba(0,0,0,0.18)" }}
         >
           {card.rank}
         </text>
-        <g transform="translate(3,13)">
+        <g transform="translate(3,16)">
           <SuitIcon suit={card.suit} size={cornerSuitSize} color={suitColor} />
         </g>
       </g>
@@ -560,9 +561,27 @@ function CommunityCard({
   card,
   revealed,
 }: {
-  card: CardFace;
+  card?: CardFace;
   revealed: boolean;
 }) {
+  const width = 62;
+  const height = 88;
+
+  if (!card) {
+    return (
+      <div
+        style={{
+          width,
+          height,
+          borderRadius: 10,
+          border: "2px dashed rgba(255,255,255,0.2)",
+          background: "rgba(255,255,255,0.04)",
+          boxShadow: "inset 0 0 14px rgba(0,0,0,0.2)",
+        }}
+      />
+    );
+  }
+
   return (
     <div
       style={{
@@ -571,9 +590,9 @@ function CommunityCard({
       }}
     >
       {revealed ? (
-        <CardFront card={card} width={48} height={68} />
+        <CardFront card={card} width={width} height={height} />
       ) : (
-        <CardBack width={48} height={68} />
+        <CardBack width={width} height={height} />
       )}
     </div>
   );
@@ -688,9 +707,9 @@ function PlayerSeat({
               style={{ transform: i === 0 ? "rotate(-3deg)" : "rotate(3deg)" }}
             >
               {isHuman ? (
-                <CardFront card={c} width={48} height={68} />
+                <CardFront card={c} width={50} height={70} />
               ) : (
-                <CardBack width={48} height={68} />
+                <CardBack width={50} height={70} />
               )}
             </div>
           ) : null,
@@ -914,7 +933,7 @@ export default function PokerTable() {
         cards: [
           first ?? { rank: "2", suit: "clubs" },
           second ?? { rank: "2", suit: "clubs" },
-        ],
+        ] as [CardFace, CardFace],
       };
     });
 
@@ -1309,8 +1328,12 @@ export default function PokerTable() {
           />
           {/* New RoyalStack logo at center */}
           <RoyalStackLogo style={{ position: "absolute", top: "18%", left: "50%", transform: "translate(-50%, 0)", zIndex: 200 }} />
-          {/* New CommunityCardDisplay at center */}
-          <CommunityCardDisplay cards={visibleCommunity} />
+          {/* Community cards (centralized) */}
+          <div style={{ position: "absolute", top: "38%", left: "50%", transform: "translate(-50%, -50%)", display: "flex", gap: 10, zIndex: 200, pointerEvents: "none" }}>
+            {visibleCommunity.map((card, i) => (
+              <CommunityCard key={i} card={card ?? undefined} revealed={communityRevealed[i]} />
+            ))}
+          </div>
 
           {/* Pot, info, and phase badge below community cards */}
           <div
