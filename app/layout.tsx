@@ -19,8 +19,8 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "Royal Stack",
-  description: "Royal Stack poker lobby",
+  title: "Royal Stacks",
+  description: "On-chain poker on Mezo Testnet. Real money, real hands.",
 };
 
 export default function RootLayout({
