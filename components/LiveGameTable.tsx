@@ -349,7 +349,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
           const isCurrentTurn = gameState.currentPlayer?.toLowerCase() === player.walletAddress.toLowerCase();
           const pos = getPlayerPosition(index, sortedPlayers.length);
           const cards: CardFace[] = player.holeCards ? player.holeCards.map(parseCard) : [];
-          const showCards = isHuman || (gameState.winners !== null && !player.folded);
+          const showCards = isHuman || (Array.isArray(gameState.winners) && gameState.winners.length > 0 && !player.folded);
 
           return (
             <div key={player.walletAddress} style={{ position: "absolute", left: `${pos.x}%`, top: `${pos.y}%`, transform: "translate(-50%, -50%)", zIndex: 10 }}>

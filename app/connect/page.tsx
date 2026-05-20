@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getNonce, verifyAuth } from "../../lib/server";
+import { getNonce, verifyAuth, getPool } from "../../lib/server";
 import { CHAIN_ID } from "../../lib/config";
 
 type Step = "connect" | "auth";
 
 const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
+const STORAGE_KEY_POOL   = "royalstack:poolId";
 
 const MEZO_TESTNET = {
   chainId: `0x${CHAIN_ID.toString(16)}`,
@@ -40,9 +41,29 @@ export default function ConnectPage() {
   useEffect(() => {
     const storedToken  = localStorage.getItem(STORAGE_KEY_TOKEN);
     const storedWallet = localStorage.getItem(STORAGE_KEY_WALLET);
+    const storedPool   = localStorage.getItem(STORAGE_KEY_POOL);
+
     if (storedToken && storedWallet) {
-      // Already authenticated — go straight to lobby
-      router.replace("/lobby");
+      // If there's a poolId, check whether the player is still in an active game
+      // and send them straight there — skip the lobby entirely.
+      if (storedPool) {
+        getPool(storedToken, storedPool)
+          .then((pool: any) => {
+            if (pool.status === "CLOSED") {
+              localStorage.removeItem(STORAGE_KEY_POOL);
+              router.replace("/lobby");
+              return;
+            }
+            const players: any[] = Array.isArray(pool.players) ? pool.players : [];
+            const isPlayer = players.some(
+              pl => (pl.address ?? "").toLowerCase() === storedWallet.toLowerCase()
+            );
+            router.replace(isPlayer ? "/game" : "/lobby");
+          })
+          .catch(() => router.replace("/lobby"));
+      } else {
+        router.replace("/lobby");
+      }
       return;
     }
     if (storedWallet) { setWalletAddress(storedWallet); setStep("auth"); }

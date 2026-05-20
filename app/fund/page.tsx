@@ -75,8 +75,8 @@ export default function FundPage() {
           const me = players.find(
             pl => (pl.address ?? "").toLowerCase() === w.toLowerCase()
           );
-          if (me?.status === "active") {
-            // Deposit confirmed on-chain — go straight to game
+          if (me?.status === "active" || me?.status === "pending") {
+            // Player has registered (pending) or deposit confirmed (active) — go to game
             router.replace("/game");
           }
         })
