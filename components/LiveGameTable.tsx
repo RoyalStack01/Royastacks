@@ -202,7 +202,10 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       disconnectToastRef.current = toast("Connection lost. Reconnecting...", "warning", 0);
     });
 
-    socket.on("POOL_JOINED", () => addLog("Joined the pool. Waiting for players..."));
+    socket.on("POOL_JOINED", () => {
+      addLog("Joined the pool. Waiting for players...");
+      sounds.lobby(); // ambient loop while waiting
+    });
 
     socket.on("PLAYER_JOINED", ({ walletAddress: addr, playerCount: count }: { walletAddress: string; playerCount?: number }) => {
       if (typeof count === "number") setPlayerCount(count);
@@ -230,6 +233,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       // Welcome sound — fires once when the game first starts
       if (!gameStartedRef.current) {
         gameStartedRef.current = true;
+        sounds.stopLobby(); // kill waiting room ambient
         sounds.welcomeToGame();
       }
 
