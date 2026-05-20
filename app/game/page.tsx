@@ -54,7 +54,7 @@ function GamePageInner() {
           const pools: any[] = await listPools(t!);
           const found = pools.find(pool => {
             if (pool.status === "CLOSED") return false;
-            return (Array.isArray(pool.players) ? pool.players : []).some(pl => matchesWallet(pl, w!));
+            return (Array.isArray(pool.players) ? pool.players as any[] : []).some((pl: any) => matchesWallet(pl, w!));
           });
           if (found) {
             p = String(found.id ?? found.poolId ?? "");
