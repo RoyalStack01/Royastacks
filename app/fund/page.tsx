@@ -65,14 +65,21 @@ export default function FundPage() {
 
   async function switchNetwork() {
     const eth = (window as any).ethereum;
-    if (!eth) return;
+    if (!eth) { setError("No wallet detected. Install MetaMask or a compatible wallet."); return; }
     try {
       await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: MEZO_TESTNET.chainId }] });
       setWrongNetwork(false);
     } catch (e: any) {
-      if (e.code === 4902) {
-        await eth.request({ method: "wallet_addEthereumChain", params: [MEZO_TESTNET] });
-        setWrongNetwork(false);
+      if (e.code === 4902 || e.code === -32603) {
+        // Chain not in wallet — add it automatically
+        try {
+          await eth.request({ method: "wallet_addEthereumChain", params: [MEZO_TESTNET] });
+          setWrongNetwork(false);
+        } catch (addErr: any) {
+          setError("Failed to add Mezo Testnet. Please add it manually: RPC https://rpc.test.mezo.org, Chain ID 31611.");
+        }
+      } else if (e.code !== 4001) {
+        setError(e.message ?? "Failed to switch network.");
       }
     }
   }
@@ -478,11 +485,22 @@ export default function FundPage() {
           <div className={`net-banner ${wrongNetwork ? "wrong" : "ok"}`}>
             {wrongNetwork ? (
               <>
-                <div className="net-info">⚠ Wrong network — switch to Mezo Testnet (Chain ID {CHAIN_ID})</div>
-                <button className="switch-btn" onClick={switchNetwork}>Switch Network</button>
+                <div className="net-info">⚠ Wrong network — Mezo Testnet required (Chain ID {CHAIN_ID})</div>
+                <button className="switch-btn" onClick={switchNetwork}>Add / Switch Network</button>
+                <div style={{ marginTop: 8, fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+                  Need testnet tokens?{" "}
+                  <a href="https://faucet.test.mezo.org/" target="_blank" rel="noopener noreferrer" style={{ color: "#FF0A54", textDecoration: "underline" }}>
+                    Get mBTC from faucet →
+                  </a>
+                </div>
               </>
             ) : (
-              <div className="net-info">✓ Connected to Mezo Testnet · Chain ID {CHAIN_ID} · Gas: mBTC</div>
+              <div className="net-info">
+                ✓ Connected to Mezo Testnet · Chain ID {CHAIN_ID} · Gas: mBTC
+                <span style={{ marginLeft: 12, opacity: 0.6 }}>
+                  · <a href="https://faucet.test.mezo.org/" target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>Faucet</a>
+                </span>
+              </div>
             )}
           </div>
         )}

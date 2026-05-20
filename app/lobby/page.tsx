@@ -12,11 +12,14 @@ const REFRESH_MS = 5000;
 
 type Tab = "live" | "demo";
 
+const POOL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
 type PoolCard = {
   id: string;
   status: string;
   playerCount: number;
   isFull: boolean;
+  createdAt: number;
 };
 
 function parsePools(raw: Record<string, unknown>[]): PoolCard[] {
@@ -27,8 +30,38 @@ function parsePools(raw: Record<string, unknown>[]): PoolCard[] {
       status: String(p.status ?? "ACTIVE"),
       playerCount: count,
       isFull: count >= 5,
+      createdAt: typeof p.createdAt === "number" ? p.createdAt : 0,
     };
   });
+}
+
+function useCountdown(createdAt: number) {
+  const [secsLeft, setSecsLeft] = useState(() => {
+    const elapsed = Date.now() - createdAt;
+    return Math.max(0, Math.floor((POOL_TIMEOUT_MS - elapsed) / 1000));
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      const elapsed = Date.now() - createdAt;
+      setSecsLeft(Math.max(0, Math.floor((POOL_TIMEOUT_MS - elapsed) / 1000)));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [createdAt]);
+  const m = Math.floor(secsLeft / 60).toString().padStart(2, "0");
+  const s = (secsLeft % 60).toString().padStart(2, "0");
+  return { display: `${m}:${s}`, secsLeft };
+}
+
+function PoolCountdown({ createdAt }: { createdAt: number }) {
+  const { display, secsLeft } = useCountdown(createdAt);
+  const urgent = secsLeft <= 120; // last 2 min
+  if (!createdAt) return null;
+  return (
+    <div style={{ fontSize: 11, fontFamily: "monospace", letterSpacing: 1, color: urgent ? "#FF0A54" : "rgba(255,255,255,0.4)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ animation: urgent ? "blink 1s infinite" : "none" }}>⏱</span>
+      {display} LEFT
+    </div>
+  );
 }
 
 // Static demo tables — purely client-side, no funds
@@ -542,6 +575,7 @@ export default function LobbyPage() {
                       <div key={pool.id} className={`lb-card${pool.isFull ? " lb-card--full" : ""}`}>
                         <div className="lb-card-id">POOL #{pool.id}</div>
                         <div className="lb-card-name">TABLE {pool.id}</div>
+                        <PoolCountdown createdAt={pool.createdAt} />
                         <div className="lb-seats">
                           {seats.map((taken, i) => (
                             <div key={i} className={`lb-seat${taken ? " lb-seat--taken" : ""}`}>

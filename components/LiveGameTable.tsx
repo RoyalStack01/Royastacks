@@ -193,8 +193,9 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
     socket.on("POOL_JOINED", () => addLog("Joined the pool. Waiting for players..."));
 
-    socket.on("PLAYER_JOINED", ({ walletAddress: addr }: { walletAddress: string }) => {
-      setPlayerCount((n) => n + 1);
+    socket.on("PLAYER_JOINED", ({ walletAddress: addr, playerCount: count }: { walletAddress: string; playerCount?: number }) => {
+      if (typeof count === "number") setPlayerCount(count);
+      else setPlayerCount((n) => n + 1);
       addLog(`${walletEmoji(addr)} ${shortAddress(addr)} joined.`);
     });
 
