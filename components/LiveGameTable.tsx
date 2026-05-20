@@ -208,6 +208,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       if (typeof count === "number") setPlayerCount(count);
       else setPlayerCount((n) => n + 1);
       addLog(`${walletEmoji(addr)} ${shortAddress(addr)} joined.`);
+      sounds.walletSigned();
     });
 
     socket.on("POOL_CANCELLED", () => {
