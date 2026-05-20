@@ -409,8 +409,8 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
                 <div style={{ color: WHITE, fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>RAISE TO ${raiseValue.toLocaleString()}</div>
                 <input
                   type="range"
-                  min={Math.max(20, callAmount + 20)}
-                  max={me?.chips ?? 100}
+                  min={Math.max(currentBet * 2, currentBet + 20)}
+                  max={(me?.chips ?? 0) + (me?.bet ?? 0)}
                   step={10}
                   value={raiseValue}
                   onChange={(e) => setRaiseValue(Number(e.target.value))}
@@ -427,7 +427,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
                 <button onClick={() => sendAction(callAmount > 0 ? "call" : "check")} style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: WHITE, fontFamily: "Georgia, serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)" }}>
                   {callAmount > 0 ? `CALL $${callAmount}` : "CHECK"}
                 </button>
-                <button onClick={() => { setRaiseValue(Math.max(20, callAmount + 20)); setIsRaising(true); }} style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`, border: `1px solid ${CRIMSON}`, borderRadius: 8, color: WHITE, fontFamily: "Georgia, serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)", boxShadow: `0 0 14px ${CRIMSON}66` }}>RAISE</button>
+                <button onClick={() => { setRaiseValue(Math.max(currentBet * 2, currentBet + 20)); setIsRaising(true); }} style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`, border: `1px solid ${CRIMSON}`, borderRadius: 8, color: WHITE, fontFamily: "Georgia, serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)", boxShadow: `0 0 14px ${CRIMSON}66` }}>RAISE</button>
               </>
             )
           ) : (
