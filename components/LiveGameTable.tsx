@@ -6,6 +6,7 @@ import { getSocket, disconnectSocket, GameState, ServerPlayer } from "../lib/soc
 import { getPool } from "../lib/server";
 import { walletEmoji } from "../lib/avatar";
 import RoyalStackLogo from "./RoyalStackLogo";
+import { useToast, ToastContainer } from "./Toast";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CRIMSON = "#E8003A";
@@ -144,10 +145,10 @@ type Props = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function LiveGameTable({ sessionToken, poolId, walletAddress }: Props) {
   const router = useRouter();
+  const { toasts, toast, dismiss } = useToast();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
   const [playerCount, setPlayerCount] = useState<number>(0);
-  const [actionError, setActionError] = useState<string>("");
   const [log, setLog] = useState<string[]>([]);
   const [showWinner, setShowWinner] = useState(false);
   const [winnerAddr, setWinnerAddr] = useState<string>("");
@@ -155,6 +156,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   const [isRaising, setIsRaising] = useState(false);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
   const joinedRef = useRef(false);
+  const disconnectToastRef = useRef<number | null>(null);
 
   const addLog = (msg: string) => setLog((prev) => [...prev.slice(-4), msg]);
 
@@ -163,8 +165,8 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       .then(pool => {
         if (pool.status === 'CLOSED') {
           sessionStorage.removeItem("royalstack:poolId");
-          addLog("Pool was cancelled. Returning to lobby...");
-          setTimeout(() => router.push("/lobby"), 2000);
+          toast("Pool was cancelled on-chain. Returning to lobby...", "error", 4000);
+          setTimeout(() => router.push("/lobby"), 4000);
           return;
         }
         if (typeof pool.playerCount === "number") setPlayerCount(pool.playerCount);
@@ -179,6 +181,10 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     // "connect" fires on both initial connection and after every reconnect in socket.io
     socket.on("connect", () => {
       setConnected(true);
+      if (disconnectToastRef.current !== null) {
+        dismiss(disconnectToastRef.current);
+        disconnectToastRef.current = null;
+      }
       if (!joinedRef.current) {
         joinedRef.current = true;
         socket.emit("JOIN_POOL", { poolId });
@@ -189,6 +195,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     socket.on("disconnect", () => {
       setConnected(false);
       joinedRef.current = false; // server lost our room on restart, re-join on next connect
+      disconnectToastRef.current = toast("Connection lost. Reconnecting...", "warning", 0);
     });
 
     socket.on("POOL_JOINED", () => addLog("Joined the pool. Waiting for players..."));
@@ -201,8 +208,8 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
     socket.on("POOL_CANCELLED", () => {
       sessionStorage.removeItem("royalstack:poolId");
-      addLog("Pool was cancelled. Returning to lobby...");
-      setTimeout(() => router.push("/lobby"), 2000);
+      toast("Pool was cancelled on-chain. Returning to lobby...", "error", 4000);
+      setTimeout(() => router.push("/lobby"), 4000);
     });
 
     socket.on("PLAYER_LEFT", ({ walletAddress: addr }: { walletAddress: string }) => {
@@ -222,8 +229,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     });
 
     socket.on("ACTION_INVALID", ({ error }: { error: string }) => {
-      setActionError(error);
-      setTimeout(() => setActionError(""), 3000);
+      toast(error, "error", 4000);
     });
 
     socket.on("HAND_SAVED", () => addLog("Hand recorded."));
@@ -258,6 +264,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   if (!gameState) {
     return (
       <div style={{ width: "100%", minHeight: "calc(100vh - 48px)", background: BLACK, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: WHITE, fontFamily: "Georgia, serif" }}>
+        <ToastContainer toasts={toasts} dismiss={dismiss} />
         <div style={{ fontSize: 48, marginBottom: 8 }}>{walletEmoji(walletAddress)}</div>
         <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 2, marginBottom: 16 }}>WAITING FOR PLAYERS</div>
         <div style={{ color: "#888", fontSize: 14, marginBottom: 8 }}>{playerCount} / 5 players in pool #{poolId}</div>
@@ -293,15 +300,10 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
         </div>
       )}
 
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
+
       {/* Ambient glow */}
       <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 50% 50%, ${CRIMSON}14 0%, transparent 70%)`, pointerEvents: "none" }} />
-
-      {/* Error toast */}
-      {actionError && (
-        <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", background: "#ff6b6b", color: WHITE, borderRadius: 8, padding: "8px 20px", fontFamily: "monospace", fontSize: 13, zIndex: 1000 }}>
-          {actionError}
-        </div>
-      )}
 
       {/* Table container */}
       <div style={{ position: "relative", width: "min(96vw, 920px)", height: "min(72vh, 520px)" }}>
