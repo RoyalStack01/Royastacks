@@ -60,7 +60,19 @@ export default function ConnectPage() {
             );
             router.replace(isPlayer ? "/game" : "/lobby");
           })
-          .catch(() => router.replace("/lobby"));
+          .catch((err: any) => {
+            const msg: string = err?.message ?? "";
+            const isAuthError =
+              msg.toLowerCase().includes("unauthorized") ||
+              msg.toLowerCase().includes("invalid") ||
+              msg.toLowerCase().includes("expired") ||
+              msg.toLowerCase().includes("forbidden") ||
+              msg.toLowerCase().includes("session");
+            if (isAuthError) {
+              localStorage.removeItem(STORAGE_KEY_TOKEN);
+            }
+            router.replace("/lobby");
+          });
       } else {
         router.replace("/lobby");
       }

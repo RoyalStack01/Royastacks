@@ -112,9 +112,21 @@ export default function LobbyPage() {
           // Pool exists but user isn't in it — they can pick a different one
           localStorage.removeItem(STORAGE_KEY_POOL);
         })
-        .catch(() => {
-          // Stale pool — clear it and show lobby normally
-          localStorage.removeItem(STORAGE_KEY_POOL);
+        .catch((err: any) => {
+          const msg: string = err?.message ?? "";
+          const isAuthError =
+            msg.toLowerCase().includes("unauthorized") ||
+            msg.toLowerCase().includes("invalid") ||
+            msg.toLowerCase().includes("expired") ||
+            msg.toLowerCase().includes("forbidden") ||
+            msg.toLowerCase().includes("session");
+          if (isAuthError) {
+            localStorage.removeItem(STORAGE_KEY_TOKEN);
+            router.replace("/connect");
+          } else {
+            // Network blip or server error — keep poolId so /game can still try
+            console.warn("[RoyalStack] lobby getPool failed (keeping poolId):", msg);
+          }
         });
     }
 

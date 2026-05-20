@@ -406,7 +406,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
           {isMyTurn && !me?.folded ? (
             isRaising ? (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, background: "rgba(0,0,0,0.65)", padding: "16px 24px", borderRadius: 16, backdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.1)" }}>
-                <div style={{ color: WHITE, fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>RAISE TO ${raiseValue.toLocaleString()}</div>
+                <div style={{ color: WHITE, fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>{currentBet > 0 ? "RAISE" : "BET"} TO ${raiseValue.toLocaleString()}</div>
                 <input
                   type="range"
                   min={Math.max(currentBet * 2, currentBet + 20)}
@@ -418,7 +418,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
                 />
                 <div style={{ display: "flex", gap: 12 }}>
                   <button onClick={() => setIsRaising(false)} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: WHITE, padding: "8px 16px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>CANCEL</button>
-                  <button onClick={() => { sendAction("raise", raiseValue); setIsRaising(false); }} style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`, border: `1px solid ${CRIMSON}`, borderRadius: 8, color: WHITE, padding: "8px 16px", fontSize: 11, fontWeight: 700, cursor: "pointer", boxShadow: `0 0 14px ${CRIMSON}66` }}>CONFIRM</button>
+                  <button onClick={() => { sendAction(currentBet > 0 ? "raise" : "bet", raiseValue); setIsRaising(false); }} style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`, border: `1px solid ${CRIMSON}`, borderRadius: 8, color: WHITE, padding: "8px 16px", fontSize: 11, fontWeight: 700, cursor: "pointer", boxShadow: `0 0 14px ${CRIMSON}66` }}>CONFIRM</button>
                 </div>
               </div>
             ) : (
@@ -427,7 +427,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
                 <button onClick={() => sendAction(callAmount > 0 ? "call" : "check")} style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: WHITE, fontFamily: "Georgia, serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)" }}>
                   {callAmount > 0 ? `CALL $${callAmount}` : "CHECK"}
                 </button>
-                <button onClick={() => { setRaiseValue(Math.max(currentBet * 2, currentBet + 20)); setIsRaising(true); }} style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`, border: `1px solid ${CRIMSON}`, borderRadius: 8, color: WHITE, fontFamily: "Georgia, serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)", boxShadow: `0 0 14px ${CRIMSON}66` }}>RAISE</button>
+                <button onClick={() => { setRaiseValue(currentBet > 0 ? Math.max(currentBet * 2, currentBet + 20) : 20); setIsRaising(true); }} style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`, border: `1px solid ${CRIMSON}`, borderRadius: 8, color: WHITE, fontFamily: "Georgia, serif", fontSize: 11, fontWeight: 700, letterSpacing: 1, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)", boxShadow: `0 0 14px ${CRIMSON}66` }}>{currentBet > 0 ? "RAISE" : "BET"}</button>
               </>
             )
           ) : (
