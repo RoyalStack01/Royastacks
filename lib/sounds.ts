@@ -1,11 +1,12 @@
 const cache: Record<string, HTMLAudioElement> = {};
 
-function play(src: string) {
+function play(src: string, volume = 1.0) {
   if (typeof window === "undefined") return;
   if (!cache[src]) {
     cache[src] = new Audio(src);
     cache[src].preload = "auto";
   }
+  cache[src].volume = volume;
   cache[src].currentTime = 0;
   cache[src].play().catch(() => {});
 }

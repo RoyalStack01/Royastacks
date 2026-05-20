@@ -1302,6 +1302,12 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
     return () => clearTimeout(timeout);
   }, [currentTurn, phase, players, currentBet, pot]);
 
+  useEffect(() => {
+    if (currentTurn === HUMAN_PLAYER_ID && phase !== "roundEnd") {
+      sounds.yourTurn();
+    }
+  }, [currentTurn]);
+
   return (
     <div
       style={{
