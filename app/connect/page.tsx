@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getNonce, verifyAuth, getPool } from "../../lib/server";
+import { sounds } from "../../lib/sounds";
 import { CHAIN_ID } from "../../lib/config";
 
 type Step = "connect" | "auth";
@@ -132,6 +133,7 @@ export default function ConnectPage() {
       const { sessionToken: token } = await verifyAuth(walletAddress, signature, message);
       setSessionToken(token);
       localStorage.setItem(STORAGE_KEY_TOKEN, token);
+      sounds.walletSigned();
       router.push("/lobby");
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }

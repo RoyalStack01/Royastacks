@@ -7,6 +7,7 @@ import { getPool } from "../lib/server";
 import { walletEmoji } from "../lib/avatar";
 import RoyalStackLogo from "./RoyalStackLogo";
 import { useToast, ToastContainer } from "./Toast";
+import { sounds } from "../lib/sounds";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CRIMSON = "#E8003A";
@@ -157,6 +158,8 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
   const joinedRef = useRef(false);
   const disconnectToastRef = useRef<number | null>(null);
+  const gameStartedRef = useRef(false);
+  const lastActivePlayerRef = useRef<string | null>(null);
 
   const addLog = (msg: string) => setLog((prev) => [...prev.slice(-4), msg]);
 
@@ -221,10 +224,30 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
       if (!state || !Array.isArray(state.players)) return;
       setGameState(state);
       setPlayerCount(state.players.length);
+
+      // Welcome sound — fires once when the game first starts
+      if (!gameStartedRef.current) {
+        gameStartedRef.current = true;
+        sounds.welcomeToGame();
+      }
+
+      // Your-turn sound — fires each time the active seat becomes this player
+      const activePlayer = state.currentPlayer?.toLowerCase() ?? null;
+      if (activePlayer && activePlayer !== lastActivePlayerRef.current) {
+        lastActivePlayerRef.current = activePlayer;
+        if (activePlayer === walletAddress.toLowerCase()) {
+          sounds.yourTurn();
+        }
+      }
+
       if (state.winners && state.winners.length > 0) {
         const winner = state.winners[0];
         setWinnerAddr(winner.walletAddress);
         setShowWinner(true);
+        // Only play congratulations if this player is the winner
+        if (winner.walletAddress?.toLowerCase() === walletAddress.toLowerCase()) {
+          sounds.congratulations();
+        }
         setTimeout(() => setShowWinner(false), 3500);
       }
     });
@@ -241,7 +264,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     };
   }, [sessionToken, poolId]);
 
-  function sendAction(type: "fold" | "call" | "raise" | "check", amount?: number) {
+  function sendAction(type: "fold" | "call" | "raise" | "check" | "bet", amount?: number) {
     const socket = socketRef.current;
     if (!socket) return;
     const payload: { type: string; amount?: number } = { type };

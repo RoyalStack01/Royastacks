@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { listPools, createRoom, getPool } from "../../lib/server";
 import { useToast, ToastContainer } from "../../components/Toast";
+import { sounds } from "../../lib/sounds";
 
 const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
@@ -130,9 +131,13 @@ export default function LobbyPage() {
         });
     }
 
+    sounds.lobby();
     fetchPools(t);
     timerRef.current = setInterval(() => fetchPools(t), REFRESH_MS);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      sounds.stopLobby();
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
   async function fetchPools(t: string) {
