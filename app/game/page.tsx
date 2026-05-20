@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PokerTable from "../../components/tablescreen";
 import LiveGameTable from "../../components/LiveGameTable";
@@ -10,12 +11,18 @@ const STORAGE_KEY_WALLET = "royalstack:walletAddress";
 const STORAGE_KEY_POOL = "royalstack:poolId";
 
 export default function GamePage() {
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<"demo" | "live" | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [poolId, setPoolId] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
   useEffect(() => {
+    // ?demo in URL always means demo — ignore sessionStorage
+    if (searchParams.get("demo") !== null) {
+      setMode("demo");
+      return;
+    }
     const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
     const p = sessionStorage.getItem(STORAGE_KEY_POOL);
     const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
@@ -27,7 +34,7 @@ export default function GamePage() {
     } else {
       setMode("demo");
     }
-  }, []);
+  }, [searchParams]);
 
   // Hydration guard — don't render until we know which mode
   if (mode === null) return null;
