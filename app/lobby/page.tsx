@@ -174,7 +174,7 @@ export default function LobbyPage() {
   }
 
   function handleDemo(tableId: string) {
-    router.push(`/demo`);
+    router.push(`/demo?t=${tableId}`);
   }
 
   const activePools = pools.filter(p => p.status === "ACTIVE");

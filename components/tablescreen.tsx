@@ -119,6 +119,14 @@ const DEFAULT_COMMUNITY_CARDS: CardFace[] = [
   { rank: "A", suit: "hearts" },
 ];
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+interface PokerTableProps {
+  smallBlind?: number;
+  bigBlind?: number;
+  label?: string;
+  speed?: "normal" | "fast";
+}
+
 const RANKS = [
   "2",
   "3",
@@ -135,8 +143,9 @@ const RANKS = [
   "A",
 ] as const;
 const SUITS: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
-const BLINDS = { small: 10, big: 20 };
 const HUMAN_PLAYER_ID = 1;
+
+type PlayerAction = "fold" | "call" | "check" | "raise" | "bet";
 
 type GamePhase =
   | "preflop"
@@ -893,7 +902,9 @@ function Pot({ amount }: { amount: number }) {
 }
 
 // ─── Main Table ───────────────────────────────────────────────────────────────
-export default function PokerTable() {
+export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "Demo Table", speed = "normal" }: PokerTableProps) {
+  const BLINDS = { small: smallBlind, big: bigBlind };
+  const BOT_DELAY = speed === "fast" ? 400 : 900;
   const [winner, setWinner] = useState<Player | null>(null);
   const [showWinner, setShowWinner] = useState(false);
   const [players, setPlayers] = useState<Player[]>(DEFAULT_PLAYERS);
@@ -1109,7 +1120,7 @@ export default function PokerTable() {
   }
 
   function handlePlayerAction(
-    action: "fold" | "call" | "check" | "raise",
+    action: PlayerAction,
     amount?: number,
   ) {
     if (phase === "roundEnd" || currentTurn === null) return;
@@ -1149,21 +1160,27 @@ export default function PokerTable() {
         if (entry.id === player.id) entry.lastAction = "Check";
       });
       message = `${player.name} checks.`;
-    } else if (action === "raise") {
-      const raiseAmount =
-        amount ??
-        Math.min(player.chips, Math.max(BLINDS.big, callAmount + BLINDS.big));
+    } else if (action === "bet" || action === "raise") {
+      const isBet = action === "bet";
+      const defaultAmount = isBet
+        ? Math.min(player.chips, BLINDS.big)
+        : Math.min(player.chips, Math.max(BLINDS.big, callAmount + BLINDS.big));
+      const wagered = amount ?? defaultAmount;
       updatedPlayers.forEach((entry) => {
         if (entry.id === player.id) {
-          entry.chips -= raiseAmount;
-          entry.bet += raiseAmount;
-          entry.lastAction = `Raise to ${formatMoney(entry.bet)}`;
+          entry.chips -= wagered;
+          entry.bet += wagered;
+          entry.lastAction = isBet
+            ? `Bet ${formatMoney(wagered)}`
+            : `Raise to ${formatMoney(entry.bet)}`;
         }
       });
-      updatedPot += raiseAmount;
-      updatedBet = player.bet + raiseAmount;
+      updatedPot += wagered;
+      updatedBet = player.bet + wagered;
       raiseOccurred = true;
-      message = `${player.name} raises to ${formatMoney(updatedBet)}.`;
+      message = isBet
+        ? `${player.name} bets ${formatMoney(wagered)}.`
+        : `${player.name} raises to ${formatMoney(updatedBet)}.`;
     }
 
     setPlayers(updatedPlayers);
@@ -1201,25 +1218,26 @@ export default function PokerTable() {
       if (!player) return;
 
       const toCall = Math.max(currentBet - player.bet, 0);
-      const canRaise = player.chips > toCall;
-      let action: "fold" | "call" | "check" | "raise" = "check";
+      const canAgress = player.chips > toCall;
+      let action: PlayerAction = "check";
 
       if (toCall > 0) {
         if (player.chips <= toCall) {
           action = Math.random() < 0.45 ? "fold" : "call";
         } else if (toCall > BLINDS.big * 3) {
           action = Math.random() < 0.6 ? "fold" : "call";
-        } else if (canRaise && Math.random() < 0.25) {
+        } else if (canAgress && Math.random() < 0.25) {
           action = "raise";
         } else {
           action = "call";
         }
-      } else if (canRaise && Math.random() < 0.2) {
-        action = "raise";
+      } else if (canAgress && Math.random() < 0.2) {
+        // No bet yet on this street — use "bet"
+        action = currentBet === 0 ? "bet" : "raise";
       }
 
       handlePlayerAction(action);
-    }, 900);
+    }, BOT_DELAY);
 
     return () => clearTimeout(timeout);
   }, [currentTurn, phase, players, currentBet]);
@@ -1558,84 +1576,80 @@ export default function PokerTable() {
             </button>
           ) : isHumanTurn ? (
             isRaising ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 12,
-                  background: "rgba(0,0,0,0.65)",
-                  padding: "16px 24px",
-                  borderRadius: 16,
-                  backdropFilter: "blur(12px)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                }}
-              >
-                <div
-                  style={{
-                    color: WHITE,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  RAISE TO ${raiseValue.toLocaleString()}
-                </div>
-                <input
-                  type="range"
-                  min={Math.max(BLINDS.big, callAmount + BLINDS.big)}
-                  max={Math.max(
-                    Math.max(BLINDS.big, callAmount + BLINDS.big),
-                    Math.min(...activePlayers.map((p) => p.chips)),
-                  )}
-                  step={10}
-                  value={raiseValue}
-                  onChange={(e) => setRaiseValue(Number(e.target.value))}
-                  style={{ width: 200, accentColor: CRIMSON }}
-                />
-                <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                  <button
+              (() => {
+                const isBetMode = currentBet === 0;
+                const sliderMin = isBetMode ? BLINDS.big : Math.max(BLINDS.big, callAmount + BLINDS.big);
+                const sliderMax = Math.max(sliderMin, Math.min(...activePlayers.map((p) => p.chips)));
+                return (
+                  <div
                     style={{
-                      background: "rgba(255,255,255,0.1)",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      borderRadius: 8,
-                      color: WHITE,
-                      padding: "8px 16px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                    onClick={() => setIsRaising(false)}
-                  >
-                    CANCEL
-                  </button>
-                  <button
-                    style={{
-                      background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`,
-                      border: `1px solid ${CRIMSON}`,
-                      borderRadius: 8,
-                      color: WHITE,
-                      padding: "8px 16px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      boxShadow: `0 0 14px ${CRIMSON}66`,
-                    }}
-                    onClick={() => {
-                      handlePlayerAction("raise", raiseValue);
-                      setIsRaising(false);
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 12,
+                      background: "rgba(0,0,0,0.65)",
+                      padding: "16px 24px",
+                      borderRadius: 16,
+                      backdropFilter: "blur(12px)",
+                      border: "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
-                    CONFIRM
-                  </button>
-                </div>
-              </div>
+                    <div style={{ color: WHITE, fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>
+                      {isBetMode ? `BET ${formatMoney(raiseValue)}` : `RAISE TO ${formatMoney(raiseValue)}`}
+                    </div>
+                    <input
+                      type="range"
+                      min={sliderMin}
+                      max={sliderMax}
+                      step={BLINDS.big}
+                      value={raiseValue}
+                      onChange={(e) => setRaiseValue(Number(e.target.value))}
+                      style={{ width: 200, accentColor: CRIMSON }}
+                    />
+                    <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                      <button
+                        style={{
+                          background: "rgba(255,255,255,0.1)",
+                          border: "1px solid rgba(255,255,255,0.2)",
+                          borderRadius: 8,
+                          color: WHITE,
+                          padding: "8px 16px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                        onClick={() => setIsRaising(false)}
+                      >
+                        CANCEL
+                      </button>
+                      <button
+                        style={{
+                          background: `linear-gradient(135deg, ${CRIMSON}, #9e0028)`,
+                          border: `1px solid ${CRIMSON}`,
+                          borderRadius: 8,
+                          color: WHITE,
+                          padding: "8px 16px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          boxShadow: `0 0 14px ${CRIMSON}66`,
+                        }}
+                        onClick={() => {
+                          handlePlayerAction(isBetMode ? "bet" : "raise", raiseValue);
+                          setIsRaising(false);
+                        }}
+                      >
+                        CONFIRM
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <>
                 <button
                   style={{
-                    background:
-                      "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
                     border: "1px solid rgba(255,255,255,0.2)",
                     borderRadius: 8,
                     color: WHITE,
@@ -1654,8 +1668,7 @@ export default function PokerTable() {
                 </button>
                 <button
                   style={{
-                    background:
-                      "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
                     border: "1px solid rgba(255,255,255,0.2)",
                     borderRadius: 8,
                     color: WHITE,
@@ -1668,9 +1681,7 @@ export default function PokerTable() {
                     backdropFilter: "blur(8px)",
                     boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
                   }}
-                  onClick={() =>
-                    handlePlayerAction(callAmount > 0 ? "call" : "check")
-                  }
+                  onClick={() => handlePlayerAction(callAmount > 0 ? "call" : "check")}
                 >
                   {callAmount > 0 ? `CALL ${formatMoney(callAmount)}` : "CHECK"}
                 </button>
@@ -1690,17 +1701,13 @@ export default function PokerTable() {
                     boxShadow: `0 0 14px ${CRIMSON}66, 0 2px 8px rgba(0,0,0,0.5)`,
                   }}
                   onClick={() => {
-                    const minRaise = Math.max(
-                      BLINDS.big,
-                      callAmount + BLINDS.big,
-                    );
-                    setRaiseValue(
-                      Math.min(minRaise, currentPlayer?.chips ?? 0),
-                    );
+                    const isBetMode = currentBet === 0;
+                    const min = isBetMode ? BLINDS.big : Math.max(BLINDS.big, callAmount + BLINDS.big);
+                    setRaiseValue(Math.min(min, currentPlayer?.chips ?? 0));
                     setIsRaising(true);
                   }}
                 >
-                  RAISE
+                  {currentBet === 0 ? "BET" : "RAISE"}
                 </button>
               </>
             )
@@ -1793,7 +1800,7 @@ export default function PokerTable() {
               letterSpacing: 1,
             }}
           >
-            NL HOLD&apos;EM · $1/$2
+            NL HOLD&apos;EM · ${smallBlind}/${bigBlind}
           </span>
           <div
             style={{
@@ -1809,7 +1816,7 @@ export default function PokerTable() {
               fontFamily: "monospace",
             }}
           >
-            Table #247
+            {label}
           </span>
         </div>
       </div>

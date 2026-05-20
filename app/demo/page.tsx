@@ -1,9 +1,21 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PokerTable from "../../components/tablescreen";
 
-export default function DemoPage() {
+const DEMO_CONFIGS: Record<string, { label: string; smallBlind: number; bigBlind: number; speed: "normal" | "fast" }> = {
+  "demo-1": { label: "Practice Table I",  smallBlind: 50,  bigBlind: 100, speed: "normal" },
+  "demo-2": { label: "Practice Table II", smallBlind: 50,  bigBlind: 100, speed: "normal" },
+  "demo-3": { label: "Speed Table",       smallBlind: 100, bigBlind: 200, speed: "fast"   },
+};
+
+function DemoInner() {
+  const params = useSearchParams();
+  const tableId = params.get("t") ?? "demo-1";
+  const cfg = DEMO_CONFIGS[tableId] ?? DEMO_CONFIGS["demo-1"];
+
   return (
     <div style={{ position: "relative" }}>
       <div style={{
@@ -13,7 +25,7 @@ export default function DemoPage() {
         padding: "6px 16px", backdropFilter: "blur(8px)",
       }}>
         <span style={{ color: "#888", fontSize: 11, fontFamily: "monospace", letterSpacing: 2 }}>
-          DEMO MODE — play without real funds
+          DEMO · {cfg.label} · play without real funds
         </span>
         <Link
           href="/connect"
@@ -27,8 +39,21 @@ export default function DemoPage() {
         </Link>
       </div>
       <div style={{ paddingTop: 32 }}>
-        <PokerTable />
+        <PokerTable
+          smallBlind={cfg.smallBlind}
+          bigBlind={cfg.bigBlind}
+          label={cfg.label}
+          speed={cfg.speed}
+        />
       </div>
     </div>
+  );
+}
+
+export default function DemoPage() {
+  return (
+    <Suspense>
+      <DemoInner />
+    </Suspense>
   );
 }
