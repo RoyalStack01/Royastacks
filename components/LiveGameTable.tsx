@@ -218,6 +218,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     });
 
     socket.on("GAME_STATE_UPDATED", (state: GameState) => {
+      if (!state || !Array.isArray(state.players)) return;
       setGameState(state);
       setPlayerCount(state.players.length);
       if (state.winners && state.winners.length > 0) {

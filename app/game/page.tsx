@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PokerTable from "../../components/tablescreen";
 import LiveGameTable from "../../components/LiveGameTable";
+import { getPool } from "../../lib/server";
 
 const STORAGE_KEY_TOKEN = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
@@ -26,22 +27,49 @@ function GamePageInner() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
   useEffect(() => {
-    // ?demo in URL always means demo — ignore sessionStorage
+    // ?demo in URL → always demo, no server check needed
     if (searchParams.get("demo") !== null) {
       setMode("demo");
       return;
     }
+
     const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
     const p = sessionStorage.getItem(STORAGE_KEY_POOL);
     const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
-    if (t && p && w) {
-      setToken(t);
-      setPoolId(p);
-      setWalletAddress(w);
-      setMode("live");
-    } else {
+
+    // Without all three pieces there's nothing to verify
+    if (!t || !p || !w) {
       setMode("demo");
+      return;
     }
+
+    // Explicitly verify with the server: session valid + pool active + user is a player
+    getPool(t, p)
+      .then((pool: any) => {
+        if (pool.status === "CLOSED") {
+          // Pool gone — clear stale state and fall back to demo
+          sessionStorage.removeItem(STORAGE_KEY_POOL);
+          setMode("demo");
+          return;
+        }
+        const players: any[] = Array.isArray(pool.players) ? pool.players : [];
+        const isPlayer = players.some(
+          pl => (pl.address ?? "").toLowerCase() === w.toLowerCase()
+        );
+        if (isPlayer) {
+          setToken(t);
+          setPoolId(p);
+          setWalletAddress(w);
+          setMode("live");
+        } else {
+          // Session exists but not in this pool — demo until they properly join
+          setMode("demo");
+        }
+      })
+      .catch(() => {
+        // Server unreachable or session expired — demo, don't crash
+        setMode("demo");
+      });
   }, [searchParams]);
 
   // Hydration guard — don't render until we know which mode

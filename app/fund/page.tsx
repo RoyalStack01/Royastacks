@@ -1,10 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ethers } from "ethers";
-import { joinPool } from "../../lib/server";
+import { joinPool, getPool } from "../../lib/server";
 import { MEZO_TOKEN_ADDRESS, POOL_CONTRACT_ADDRESS, CHAIN_ID } from "../../lib/config";
+import { useToast, ToastContainer } from "../../components/Toast";
+
+function parseContractError(e: unknown): string {
+  if (!e || typeof e !== "object") return "Transaction failed";
+  const err = e as Record<string, unknown>;
+  if (typeof err.shortMessage === "string" && err.shortMessage) return err.shortMessage;
+  if (typeof err.reason === "string" && err.reason) return err.reason;
+  if (typeof err.message === "string") {
+    const msg = err.message;
+    return msg.length > 140 ? msg.slice(0, 140) + "…" : msg;
+  }
+  return "Transaction failed";
+}
 
 const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
@@ -33,12 +46,13 @@ export default function FundPage() {
   const [sessionToken, setSessionToken]   = useState<string | null>(null);
   const [poolId, setPoolId]               = useState<string | null>(null);
   const [amount, setAmount]               = useState("1");
+  const { toasts, toast, dismiss } = useToast();
   const [status, setStatus]               = useState<Status>("ready");
-  const [error, setError]                 = useState("");
   const [approveHash, setApproveHash]     = useState("");
   const [depositHash, setDepositHash]     = useState("");
   const [wrongNetwork, setWrongNetwork]   = useState(false);
   const [netChecked, setNetChecked]       = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
@@ -47,6 +61,28 @@ export default function FundPage() {
     setWalletAddress(w);
     setSessionToken(t);
     setPoolId(p);
+
+    // If on-chain deposit was already confirmed, skip straight to the game
+    if (t && p && w) {
+      getPool(t, p)
+        .then((pool: any) => {
+          if (pool.status === "CLOSED") {
+            sessionStorage.removeItem(STORAGE_KEY_POOL);
+            router.replace("/lobby");
+            return;
+          }
+          const players: any[] = Array.isArray(pool.players) ? pool.players : [];
+          const me = players.find(
+            pl => (pl.address ?? "").toLowerCase() === w.toLowerCase()
+          );
+          if (me?.status === "active") {
+            // Deposit confirmed on-chain — go straight to game
+            router.replace("/game");
+          }
+        })
+        .catch(() => {});
+    }
+
     // check network
     const eth = (window as any).ethereum;
     if (eth) {
@@ -65,21 +101,20 @@ export default function FundPage() {
 
   async function switchNetwork() {
     const eth = (window as any).ethereum;
-    if (!eth) { setError("No wallet detected. Install MetaMask or a compatible wallet."); return; }
+    if (!eth) { toast("No wallet detected. Install MetaMask or a compatible wallet.", "error"); return; }
     try {
       await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: MEZO_TESTNET.chainId }] });
       setWrongNetwork(false);
     } catch (e: any) {
       if (e.code === 4902 || e.code === -32603) {
-        // Chain not in wallet — add it automatically
         try {
           await eth.request({ method: "wallet_addEthereumChain", params: [MEZO_TESTNET] });
           setWrongNetwork(false);
-        } catch (addErr: any) {
-          setError("Failed to add Mezo Testnet. Please add it manually: RPC https://rpc.test.mezo.org, Chain ID 31611.");
+        } catch {
+          toast("Failed to add Mezo Testnet. Add manually: RPC https://rpc.test.mezo.org, Chain ID 31611.", "error");
         }
       } else if (e.code !== 4001) {
-        setError(e.message ?? "Failed to switch network.");
+        toast(e.message ?? "Failed to switch network.", "error");
       }
     }
   }
@@ -90,8 +125,7 @@ export default function FundPage() {
   }
 
   async function approveToken() {
-    setError("");
-    if (!provider) { setError("No wallet found."); return; }
+    if (!provider) { toast("No wallet found.", "error"); return; }
     try {
       setStatus("approving");
       const signer = await provider.getSigner();
@@ -102,12 +136,11 @@ export default function FundPage() {
       setApproveHash(tx.hash);
       await tx.wait();
       setStatus("approved");
-    } catch (e) { setError((e as Error).message); setStatus("ready"); }
+    } catch (e) { toast(parseContractError(e), "error"); setStatus("ready"); }
   }
 
   async function depositToPool() {
-    setError("");
-    if (!provider || !poolId) { setError("Missing provider or pool ID."); return; }
+    if (!provider || !poolId) { toast("Missing provider or pool ID.", "error"); return; }
     try {
       setStatus("depositing");
       const signer = await provider.getSigner();
@@ -118,18 +151,37 @@ export default function FundPage() {
       setDepositHash(tx.hash);
       await tx.wait();
       setStatus("deposited");
-    } catch (e) { setError((e as Error).message); setStatus("approved"); }
+    } catch (e) { toast(parseContractError(e), "error"); setStatus("approved"); }
   }
 
   async function registerWithServer() {
-    setError("");
-    if (!sessionToken || !poolId || !depositHash) { setError("Complete the deposit first."); return; }
+    if (!sessionToken || !poolId || !depositHash) { toast("Complete the deposit first.", "error"); return; }
     try {
       setStatus("registering");
       await joinPool(sessionToken, poolId);
-      setStatus("complete");
-    } catch (e) { setError((e as Error).message); setStatus("deposited"); }
+      // Registration done — head straight to the table. The waiting screen
+      // in LiveGameTable handles everything from here via socket.
+      router.replace("/game");
+    } catch (e) { toast(parseContractError(e), "error"); setStatus("deposited"); }
   }
+
+  // Poll pool status after deposit is confirmed, so we catch cancellations
+  // before the user manually advances to step 3.
+  useEffect(() => {
+    if (status !== "deposited" || !sessionToken || !poolId) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const pool: any = await getPool(sessionToken, poolId);
+        if (pool.status === "CLOSED") {
+          clearInterval(pollRef.current!);
+          sessionStorage.removeItem(STORAGE_KEY_POOL);
+          toast("Pool was cancelled. Returning to lobby...", "error", 4000);
+          setTimeout(() => router.replace("/lobby"), 4000);
+        }
+      } catch {}
+    }, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [status, sessionToken, poolId]);
 
   const missingSession = !walletAddress || !sessionToken || !poolId;
 
@@ -139,7 +191,7 @@ export default function FundPage() {
     : status === "approved" || status === "depositing" ? 1
     : 0;
 
-  const SUB_STEPS = ["Approve Token", "Deposit to Pool", "Register Player", "Ready to Play"];
+  const SUB_STEPS = ["Approve Token", "Deposit to Pool", "Register Player", "Joining Table"];
 
   return (
     <>
@@ -463,6 +515,7 @@ export default function FundPage() {
         .play-btn:hover { transform: translateY(-3px); }
       `}</style>
 
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
       <div className="fund-wrap">
         <a href="/connect" className="back-link">← Back to connect</a>
 
@@ -599,16 +652,7 @@ export default function FundPage() {
           </div>
         )}
 
-        {error && <div className="error-box">{error}</div>}
-
-        {/* Play button — shown when complete */}
-        {status === "complete" && (
-          <div className="play-btn-wrap">
-            <button className="play-btn" onClick={() => router.push("/game")}>
-              Take Your Seat →
-            </button>
-          </div>
-        )}
+        {/* Registering redirects automatically — nothing to render here */}
       </div>
     </>
   );

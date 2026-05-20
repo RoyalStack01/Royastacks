@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { listPools, createRoom } from "../../lib/server";
+import { listPools, createRoom, getPool } from "../../lib/server";
+import { useToast, ToastContainer } from "../../components/Toast";
 
 const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
@@ -78,17 +79,45 @@ export default function LobbyPage() {
   const [tab, setTab]             = useState<Tab>("live");
   const [pools, setPools]         = useState<PoolCard[]>([]);
   const [loading, setLoading]     = useState(true);
+  const { toasts, toast, dismiss } = useToast();
   const [creating, setCreating]   = useState(false);
   const [joiningId, setJoiningId] = useState<string | null>(null);
-  const [error, setError]         = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
     const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
+    const p = sessionStorage.getItem(STORAGE_KEY_POOL);
     if (!t || !w) { router.replace("/connect"); return; }
     setToken(t);
     setWallet(w);
+
+    // If the user already has a poolId stored, check if they're already a player —
+    // if so, skip the lobby and send them straight back to the game.
+    if (p) {
+      getPool(t, p)
+        .then((pool: any) => {
+          if (pool.status === "CLOSED") {
+            sessionStorage.removeItem(STORAGE_KEY_POOL);
+            return;
+          }
+          const players: any[] = Array.isArray(pool.players) ? pool.players : [];
+          const alreadyIn = players.some(
+            pl => (pl.address ?? "").toLowerCase() === w.toLowerCase()
+          );
+          if (alreadyIn) {
+            router.replace("/game");
+            return;
+          }
+          // Pool exists but user isn't in it — they can pick a different one
+          sessionStorage.removeItem(STORAGE_KEY_POOL);
+        })
+        .catch(() => {
+          // Stale pool — clear it and show lobby normally
+          sessionStorage.removeItem(STORAGE_KEY_POOL);
+        });
+    }
+
     fetchPools(t);
     timerRef.current = setInterval(() => fetchPools(t), REFRESH_MS);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -112,14 +141,13 @@ export default function LobbyPage() {
   }
 
   async function handleCreate() {
-    setError("");
     setCreating(true);
     try {
       const { poolId } = await createRoom(token);
       sessionStorage.setItem(STORAGE_KEY_POOL, poolId);
       router.push("/fund");
     } catch (e: any) {
-      setError(e.message ?? "Failed to create room");
+      toast(e.message ?? "Failed to create room", "error");
     } finally {
       setCreating(false);
     }
@@ -509,6 +537,7 @@ export default function LobbyPage() {
         }
       `}</style>
 
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
       <div className="lb-root">
         <div className="lb-topbar">
           <a href="/" className="lb-logo">ROYAL STACKS</a>
@@ -527,8 +556,6 @@ export default function LobbyPage() {
             <div className="lb-eyebrow">Mezo Testnet · Chain 31611</div>
             <h1 className="lb-title">WAITING FLOOR</h1>
           </div>
-
-          {error && <div className="lb-error">{error}</div>}
 
           {/* Tab bar */}
           <div className="tab-bar">
