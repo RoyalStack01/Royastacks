@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PokerTable from "../../components/tablescreen";
@@ -11,6 +11,14 @@ const STORAGE_KEY_WALLET = "royalstack:walletAddress";
 const STORAGE_KEY_POOL = "royalstack:poolId";
 
 export default function GamePage() {
+  return (
+    <Suspense>
+      <GamePageInner />
+    </Suspense>
+  );
+}
+
+function GamePageInner() {
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<"demo" | "live" | null>(null);
   const [token, setToken] = useState<string | null>(null);
