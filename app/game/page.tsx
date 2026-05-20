@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import LiveGameTable from "../../components/LiveGameTable";
-import { getPool } from "../../lib/server";
+import { getPool, listPools } from "../../lib/server";
 
 const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
@@ -20,7 +20,14 @@ export default function GamePage() {
 type CheckState =
   | { status: "checking" }
   | { status: "live"; token: string; poolId: string; walletAddress: string }
-  | { status: "redirect"; reason: string };
+  | { status: "failed"; reason: string };
+
+function matchesWallet(pl: any, wallet: string): boolean {
+  const addr = typeof pl === "string"
+    ? pl
+    : (pl.address ?? pl.walletAddress ?? pl.id ?? "");
+  return addr.toLowerCase() === wallet.toLowerCase();
+}
 
 function GamePageInner() {
   const router = useRouter();
@@ -30,70 +37,79 @@ function GamePageInner() {
     let cancelled = false;
 
     const t = localStorage.getItem(STORAGE_KEY_TOKEN);
-    const p = localStorage.getItem(STORAGE_KEY_POOL);
     const w = localStorage.getItem(STORAGE_KEY_WALLET);
+    let   p = localStorage.getItem(STORAGE_KEY_POOL);
 
-    if (!t || !p || !w) {
-      const reason = !t ? "no session token" : !p ? "no pool id" : "no wallet";
-      console.warn("[RoyalStack/game] missing storage:", reason);
-      setCheck({ status: "redirect", reason });
+    if (!t || !w) {
+      setCheck({ status: "failed", reason: !t ? "no session — connect your wallet first" : "no wallet found" });
       return;
     }
 
-    getPool(t, p)
-      .then((pool: any) => {
-        if (cancelled) return;
-
-        console.log("[RoyalStack/game] getPool response:", {
-          status: pool.status,
-          gameStarted: pool.gameStarted,
-          playerCount: pool.playerCount,
-          players: pool.players,
-        });
-
-        if (pool.status === "CLOSED") {
-          localStorage.removeItem(STORAGE_KEY_POOL);
-          setCheck({ status: "redirect", reason: `pool ${p} is CLOSED` });
-          return;
+    async function run() {
+      // If poolId was wiped from localStorage, scan all active pools on the server
+      // to recover the one the user is already seated in.
+      if (!p) {
+        console.log("[RoyalStack/game] no poolId in storage — scanning server for active seat...");
+        try {
+          const pools: any[] = await listPools(t!);
+          const found = pools.find(pool => {
+            if (pool.status === "CLOSED") return false;
+            return (Array.isArray(pool.players) ? pool.players : []).some(pl => matchesWallet(pl, w!));
+          });
+          if (found) {
+            p = String(found.id ?? found.poolId ?? "");
+            localStorage.setItem(STORAGE_KEY_POOL, p);
+            console.log("[RoyalStack/game] recovered poolId:", p);
+          }
+        } catch (e) {
+          console.warn("[RoyalStack/game] listPools scan failed:", e);
         }
+      }
 
-        const players: any[] = Array.isArray(pool.players) ? pool.players : [];
-        const isPlayer = players.some(pl => {
-          const addr = typeof pl === "string"
-            ? pl
-            : (pl.address ?? pl.walletAddress ?? pl.id ?? "");
-          return addr.toLowerCase() === w.toLowerCase();
-        });
+      if (!p) {
+        setCheck({ status: "failed", reason: "you are not currently seated in any active pool" });
+        return;
+      }
 
-        console.log("[RoyalStack/game] isPlayer:", isPlayer, "| wallet:", w, "| pool players:", players);
-
-        if (isPlayer) {
-          setCheck({ status: "live", token: t, poolId: p, walletAddress: w });
-        } else {
-          localStorage.removeItem(STORAGE_KEY_POOL);
-          setCheck({ status: "redirect", reason: `wallet ${w.slice(0,8)}… not found in pool ${p} (${players.length} players)` });
-        }
-      })
-      .catch((err: any) => {
-        if (cancelled) return;
+      // Verify this specific pool
+      let pool: any;
+      try {
+        pool = await getPool(t!, p);
+      } catch (err: any) {
         const msg: string = err?.message ?? "unknown error";
-        console.error("[RoyalStack/game] getPool error:", msg);
-
-        const isAuthError =
-          msg.toLowerCase().includes("unauthorized") ||
-          msg.toLowerCase().includes("invalid") ||
-          msg.toLowerCase().includes("expired") ||
-          msg.toLowerCase().includes("forbidden") ||
-          msg.toLowerCase().includes("session");
-
-        if (isAuthError) {
+        const isAuth = ["unauthorized","invalid","expired","forbidden","session"].some(k => msg.toLowerCase().includes(k));
+        if (isAuth) {
           localStorage.removeItem(STORAGE_KEY_TOKEN);
-          setCheck({ status: "redirect", reason: `auth error: ${msg}` });
+          setCheck({ status: "failed", reason: `session expired — reconnect your wallet` });
         } else {
-          // Server blip — keep poolId, go to lobby so they can retry
-          setCheck({ status: "redirect", reason: `server error: ${msg}` });
+          setCheck({ status: "failed", reason: `server error: ${msg}` });
         }
-      });
+        return;
+      }
+
+      console.log("[RoyalStack/game] pool:", { status: pool.status, gameStarted: pool.gameStarted, playerCount: pool.playerCount, players: pool.players });
+
+      if (pool.status === "CLOSED") {
+        localStorage.removeItem(STORAGE_KEY_POOL);
+        setCheck({ status: "failed", reason: `pool ${p} has ended` });
+        return;
+      }
+
+      const players: any[] = Array.isArray(pool.players) ? pool.players : [];
+      const isPlayer = players.some(pl => matchesWallet(pl, w!));
+      console.log("[RoyalStack/game] isPlayer:", isPlayer, "wallet:", w, "players:", players);
+
+      if (isPlayer) {
+        setCheck({ status: "live", token: t!, poolId: p!, walletAddress: w! });
+      } else {
+        localStorage.removeItem(STORAGE_KEY_POOL);
+        setCheck({ status: "failed", reason: `wallet ${w!.slice(0,8)}… not found in pool ${p} (${players.length} players recorded)` });
+      }
+    }
+
+    run().catch(err => {
+      if (!cancelled) setCheck({ status: "failed", reason: err?.message ?? "unexpected error" });
+    });
 
     return () => { cancelled = true; };
   }, []);
@@ -112,16 +128,16 @@ function GamePageInner() {
     );
   }
 
-  // ── Redirect ──────────────────────────────────────────────────────────────
-  if (check.status === "redirect") {
+  // ── Failed ────────────────────────────────────────────────────────────────
+  if (check.status === "failed") {
     return (
       <div style={{
         minHeight: "100vh", background: "#0A0A0A", display: "flex",
         flexDirection: "column", alignItems: "center", justifyContent: "center",
-        color: "#fff", fontFamily: "monospace", gap: 16, padding: 24,
+        color: "#fff", fontFamily: "monospace", gap: 16, padding: 24, textAlign: "center",
       }}>
         <div style={{ fontSize: 32 }}>🃏</div>
-        <div style={{ fontSize: 13, color: "#888", letterSpacing: 1, textAlign: "center", maxWidth: 360 }}>
+        <div style={{ fontSize: 13, color: "#888", letterSpacing: 1, maxWidth: 380 }}>
           {check.reason}
         </div>
         <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
@@ -136,7 +152,7 @@ function GamePageInner() {
             GO TO LOBBY
           </button>
           <button
-            onClick={() => { setCheck({ status: "checking" }); window.location.reload(); }}
+            onClick={() => window.location.reload()}
             style={{
               background: "transparent", color: "#888", border: "1px solid #333",
               borderRadius: 8, padding: "10px 24px", fontFamily: "monospace",
