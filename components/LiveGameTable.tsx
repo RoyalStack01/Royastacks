@@ -258,6 +258,16 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
     socket.on("HAND_SAVED", () => addLog("Hand recorded."));
 
+    socket.on("GAME_ENDED", ({ winners }: { winners: any[] }) => {
+      const names = winners.map(w => `${w.walletAddress?.slice(0, 6)}… (+${w.amount})`).join(", ");
+      addLog(`Game over. Winner${winners.length > 1 ? "s" : ""}: ${names}`);
+      toast(`Game over! Returning to lobby...`, "info", 5000);
+      setTimeout(() => {
+        localStorage.removeItem("royalstack:poolId");
+        router.push("/lobby");
+      }, 5000);
+    });
+
     return () => {
       socket.emit("LEAVE_POOL", { poolId });
       disconnectSocket();

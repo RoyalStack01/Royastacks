@@ -103,9 +103,12 @@ export default function LobbyPage() {
             return;
           }
           const players: any[] = Array.isArray(pool.players) ? pool.players : [];
-          const alreadyIn = players.some(
-            pl => (pl.address ?? "").toLowerCase() === w.toLowerCase()
-          );
+          const alreadyIn = players.some(pl => {
+            const addr = typeof pl === "string"
+              ? pl
+              : (pl.address ?? pl.walletAddress ?? pl.id ?? "");
+            return addr.toLowerCase() === w.toLowerCase();
+          });
           if (alreadyIn) {
             router.replace("/game");
             return;

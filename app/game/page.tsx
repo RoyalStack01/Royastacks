@@ -29,6 +29,8 @@ function GamePageInner() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     // ?demo in URL → always demo, no server check needed
     if (searchParams.get("demo") !== null) {
       setMode("demo");
@@ -46,14 +48,16 @@ function GamePageInner() {
       return;
     }
 
-    // Explicitly verify with the server: session valid + pool active + user is a player
+    // Verify with server: session valid + pool active + user is a player
     getPool(t, p)
       .then((pool: any) => {
+        if (cancelled) return;
+
         console.log("[RoyalStack] getPool response:", {
           status: pool.status,
           gameStarted: pool.gameStarted,
           playerCount: pool.playerCount,
-          players: (pool.players ?? []).map((pl: any) => pl.address),
+          players: pool.players,
         });
 
         if (pool.status === "CLOSED") {
@@ -64,11 +68,15 @@ function GamePageInner() {
         }
 
         const players: any[] = Array.isArray(pool.players) ? pool.players : [];
-        const isPlayer = players.some(
-          pl => (pl.address ?? "").toLowerCase() === w.toLowerCase()
-        );
+        // players can be strings (wallet addresses) or objects with address/walletAddress field
+        const isPlayer = players.some(pl => {
+          const addr = typeof pl === "string"
+            ? pl
+            : (pl.address ?? pl.walletAddress ?? pl.id ?? "");
+          return addr.toLowerCase() === w.toLowerCase();
+        });
 
-        console.log("[RoyalStack] isPlayer check:", { wallet: w, isPlayer });
+        console.log("[RoyalStack] isPlayer check:", { wallet: w, isPlayer, playerCount: players.length });
 
         if (isPlayer) {
           setToken(t);
@@ -81,6 +89,7 @@ function GamePageInner() {
         }
       })
       .catch((err: any) => {
+        if (cancelled) return;
         const msg: string = err?.message ?? "unknown error";
         console.error("[RoyalStack] getPool failed:", msg);
 
@@ -92,7 +101,6 @@ function GamePageInner() {
           msg.toLowerCase().includes("session");
 
         if (isAuthError) {
-          // Session expired — clear stale token and force re-auth
           localStorage.removeItem(STORAGE_KEY_TOKEN);
           router.replace("/connect");
         } else {
@@ -100,7 +108,9 @@ function GamePageInner() {
           setMode("demo");
         }
       });
-  }, [searchParams, router]);
+
+    return () => { cancelled = true; };
+  }, [searchParams]); // router is a stable singleton in App Router — not a dep
 
   // Hydration guard — don't render until we know which mode
   if (mode === null) return null;

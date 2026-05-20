@@ -56,9 +56,12 @@ export default function ConnectPage() {
               return;
             }
             const players: any[] = Array.isArray(pool.players) ? pool.players : [];
-            const isPlayer = players.some(
-              pl => (pl.address ?? "").toLowerCase() === storedWallet.toLowerCase()
-            );
+            const isPlayer = players.some(pl => {
+              const addr = typeof pl === "string"
+                ? pl
+                : (pl.address ?? pl.walletAddress ?? pl.id ?? "");
+              return addr.toLowerCase() === storedWallet.toLowerCase();
+            });
             router.replace(isPlayer ? "/game" : "/lobby");
           })
           .catch((err: any) => {
