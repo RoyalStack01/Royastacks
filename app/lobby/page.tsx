@@ -174,8 +174,7 @@ export default function LobbyPage() {
   }
 
   function handleDemo(tableId: string) {
-    // Demo goes straight to the game page — no session needed, no funds
-    router.push(`/game?demo=${tableId}`);
+    router.push(`/demo`);
   }
 
   const activePools = pools.filter(p => p.status === "ACTIVE");

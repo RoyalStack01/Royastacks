@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import PokerTable from "../../components/tablescreen";
+import { useRouter } from "next/navigation";
 import LiveGameTable from "../../components/LiveGameTable";
 import { getPool } from "../../lib/server";
 
-const STORAGE_KEY_TOKEN = "royalstack:sessionToken";
+const STORAGE_KEY_TOKEN  = "royalstack:sessionToken";
 const STORAGE_KEY_WALLET = "royalstack:walletAddress";
-const STORAGE_KEY_POOL = "royalstack:poolId";
+const STORAGE_KEY_POOL   = "royalstack:poolId";
 
 export default function GamePage() {
   return (
@@ -19,41 +17,34 @@ export default function GamePage() {
   );
 }
 
+type CheckState =
+  | { status: "checking" }
+  | { status: "live"; token: string; poolId: string; walletAddress: string }
+  | { status: "redirect"; reason: string };
+
 function GamePageInner() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const [mode, setMode] = useState<"demo" | "live" | null>(null);
-  const [demoReason, setDemoReason] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [poolId, setPoolId] = useState<string | null>(null);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [check, setCheck] = useState<CheckState>({ status: "checking" });
 
   useEffect(() => {
     let cancelled = false;
-
-    // ?demo in URL → always demo, no server check needed
-    if (searchParams.get("demo") !== null) {
-      setMode("demo");
-      return;
-    }
 
     const t = localStorage.getItem(STORAGE_KEY_TOKEN);
     const p = localStorage.getItem(STORAGE_KEY_POOL);
     const w = localStorage.getItem(STORAGE_KEY_WALLET);
 
-    // Without all three pieces there's nothing to verify
     if (!t || !p || !w) {
-      setMode("demo");
-      setDemoReason(!t ? "no session" : !p ? "no pool" : "no wallet");
+      const reason = !t ? "no session token" : !p ? "no pool id" : "no wallet";
+      console.warn("[RoyalStack/game] missing storage:", reason);
+      setCheck({ status: "redirect", reason });
       return;
     }
 
-    // Verify with server: session valid + pool active + user is a player
     getPool(t, p)
       .then((pool: any) => {
         if (cancelled) return;
 
-        console.log("[RoyalStack] getPool response:", {
+        console.log("[RoyalStack/game] getPool response:", {
           status: pool.status,
           gameStarted: pool.gameStarted,
           playerCount: pool.playerCount,
@@ -62,13 +53,11 @@ function GamePageInner() {
 
         if (pool.status === "CLOSED") {
           localStorage.removeItem(STORAGE_KEY_POOL);
-          setDemoReason("pool closed");
-          setMode("demo");
+          setCheck({ status: "redirect", reason: `pool ${p} is CLOSED` });
           return;
         }
 
         const players: any[] = Array.isArray(pool.players) ? pool.players : [];
-        // players can be strings (wallet addresses) or objects with address/walletAddress field
         const isPlayer = players.some(pl => {
           const addr = typeof pl === "string"
             ? pl
@@ -76,22 +65,19 @@ function GamePageInner() {
           return addr.toLowerCase() === w.toLowerCase();
         });
 
-        console.log("[RoyalStack] isPlayer check:", { wallet: w, isPlayer, playerCount: players.length });
+        console.log("[RoyalStack/game] isPlayer:", isPlayer, "| wallet:", w, "| pool players:", players);
 
         if (isPlayer) {
-          setToken(t);
-          setPoolId(p);
-          setWalletAddress(w);
-          setMode("live");
+          setCheck({ status: "live", token: t, poolId: p, walletAddress: w });
         } else {
-          setDemoReason(`not in pool ${p} (${players.length} players found)`);
-          setMode("demo");
+          localStorage.removeItem(STORAGE_KEY_POOL);
+          setCheck({ status: "redirect", reason: `wallet ${w.slice(0,8)}… not found in pool ${p} (${players.length} players)` });
         }
       })
       .catch((err: any) => {
         if (cancelled) return;
         const msg: string = err?.message ?? "unknown error";
-        console.error("[RoyalStack] getPool failed:", msg);
+        console.error("[RoyalStack/game] getPool error:", msg);
 
         const isAuthError =
           msg.toLowerCase().includes("unauthorized") ||
@@ -102,54 +88,74 @@ function GamePageInner() {
 
         if (isAuthError) {
           localStorage.removeItem(STORAGE_KEY_TOKEN);
-          router.replace("/connect");
+          setCheck({ status: "redirect", reason: `auth error: ${msg}` });
         } else {
-          setDemoReason(msg);
-          setMode("demo");
+          // Server blip — keep poolId, go to lobby so they can retry
+          setCheck({ status: "redirect", reason: `server error: ${msg}` });
         }
       });
 
     return () => { cancelled = true; };
-  }, [searchParams]); // router is a stable singleton in App Router — not a dep
+  }, []);
 
-  // Hydration guard — don't render until we know which mode
-  if (mode === null) return null;
-
-  if (mode === "live" && token && poolId && walletAddress) {
+  // ── Checking ──────────────────────────────────────────────────────────────
+  if (check.status === "checking") {
     return (
-      <div style={{ position: "relative" }}>
-        {/* Exit to demo link */}
-        <div style={{ position: "fixed", top: 12, right: 16, zIndex: 2000 }}>
-          <Link
-            href="/game?demo=1"
-            onClick={() => setMode("demo")}
-            style={{ color: "#888", fontSize: 11, fontFamily: "monospace", textDecoration: "none", letterSpacing: 1, background: "rgba(0,0,0,0.6)", padding: "4px 10px", borderRadius: 6, border: "1px solid #333" }}
-          >
-            DEMO MODE
-          </Link>
-        </div>
-        <LiveGameTable sessionToken={token} poolId={poolId} walletAddress={walletAddress} />
+      <div style={{
+        minHeight: "100vh", background: "#0A0A0A", display: "flex",
+        flexDirection: "column", alignItems: "center", justifyContent: "center",
+        color: "#fff", fontFamily: "monospace", gap: 16,
+      }}>
+        <div style={{ fontSize: 32 }}>⏳</div>
+        <div style={{ fontSize: 14, color: "#888", letterSpacing: 2 }}>VERIFYING SESSION...</div>
       </div>
     );
   }
 
+  // ── Redirect ──────────────────────────────────────────────────────────────
+  if (check.status === "redirect") {
+    return (
+      <div style={{
+        minHeight: "100vh", background: "#0A0A0A", display: "flex",
+        flexDirection: "column", alignItems: "center", justifyContent: "center",
+        color: "#fff", fontFamily: "monospace", gap: 16, padding: 24,
+      }}>
+        <div style={{ fontSize: 32 }}>🃏</div>
+        <div style={{ fontSize: 13, color: "#888", letterSpacing: 1, textAlign: "center", maxWidth: 360 }}>
+          {check.reason}
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+          <button
+            onClick={() => router.replace("/lobby")}
+            style={{
+              background: "#E8003A", color: "#fff", border: "none", borderRadius: 8,
+              padding: "10px 24px", fontFamily: "monospace", fontWeight: 700,
+              fontSize: 13, letterSpacing: 1, cursor: "pointer",
+            }}
+          >
+            GO TO LOBBY
+          </button>
+          <button
+            onClick={() => { setCheck({ status: "checking" }); window.location.reload(); }}
+            style={{
+              background: "transparent", color: "#888", border: "1px solid #333",
+              borderRadius: 8, padding: "10px 24px", fontFamily: "monospace",
+              fontSize: 13, letterSpacing: 1, cursor: "pointer",
+            }}
+          >
+            RETRY
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Live table ────────────────────────────────────────────────────────────
   return (
-    <div style={{ position: "relative" }}>
-      {/* Demo mode banner */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", gap: 16, background: "rgba(10,10,10,0.92)", borderBottom: "1px solid rgba(232,0,58,0.25)", padding: "6px 16px", backdropFilter: "blur(8px)" }}>
-        <span style={{ color: "#888", fontSize: 11, fontFamily: "monospace", letterSpacing: 2 }}>
-          DEMO MODE{demoReason ? ` — ${demoReason}` : " — play without real funds"}
-        </span>
-        <Link
-          href="/connect"
-          style={{ color: "#E8003A", fontSize: 11, fontFamily: "monospace", fontWeight: 700, textDecoration: "none", letterSpacing: 1, border: "1px solid rgba(232,0,58,0.4)", borderRadius: 6, padding: "3px 10px" }}
-        >
-          PLAY FOR REAL →
-        </Link>
-      </div>
-      <div style={{ paddingTop: 32 }}>
-        <PokerTable />
-      </div>
-    </div>
+    <LiveGameTable
+      sessionToken={check.token}
+      poolId={check.poolId}
+      walletAddress={check.walletAddress}
+    />
   );
 }

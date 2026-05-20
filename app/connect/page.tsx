@@ -459,7 +459,7 @@ export default function ConnectPage() {
         {error && <div className="error-box">{error}</div>}
 
         <div className="demo-link">
-          Just want to try it out?<a href="/game">Play the free demo →</a>
+          Just want to try it out?<a href="/demo">Play the free demo →</a>
         </div>
       </div>
     </>
