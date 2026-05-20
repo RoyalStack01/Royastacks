@@ -38,8 +38,8 @@ export default function ConnectPage() {
   const [wrongNetwork, setWrongNetwork] = useState(false);
 
   useEffect(() => {
-    const storedToken  = sessionStorage.getItem(STORAGE_KEY_TOKEN);
-    const storedWallet = sessionStorage.getItem(STORAGE_KEY_WALLET);
+    const storedToken  = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const storedWallet = localStorage.getItem(STORAGE_KEY_WALLET);
     if (storedToken && storedWallet) {
       // Already authenticated — go straight to lobby
       router.replace("/lobby");
@@ -80,7 +80,7 @@ export default function ConnectPage() {
       if (!accounts?.length) throw new Error("No account returned.");
       const address = accounts[0];
       setWalletAddress(address);
-      sessionStorage.setItem(STORAGE_KEY_WALLET, address);
+      localStorage.setItem(STORAGE_KEY_WALLET, address);
       await checkNetwork();
       setStep("auth");
     } catch (e) { setError((e as Error).message); }
@@ -98,7 +98,7 @@ export default function ConnectPage() {
       const signature = await eth.request({ method: "personal_sign", params: [message, walletAddress] }) as string;
       const { sessionToken: token } = await verifyAuth(walletAddress, signature, message);
       setSessionToken(token);
-      sessionStorage.setItem(STORAGE_KEY_TOKEN, token);
+      localStorage.setItem(STORAGE_KEY_TOKEN, token);
       router.push("/lobby");
     } catch (e) { setError((e as Error).message); }
     finally { setLoading(false); }

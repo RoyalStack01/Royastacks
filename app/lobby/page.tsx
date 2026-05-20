@@ -85,9 +85,9 @@ export default function LobbyPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
-    const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
-    const p = sessionStorage.getItem(STORAGE_KEY_POOL);
+    const t = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const w = localStorage.getItem(STORAGE_KEY_WALLET);
+    const p = localStorage.getItem(STORAGE_KEY_POOL);
     if (!t || !w) { router.replace("/connect"); return; }
     setToken(t);
     setWallet(w);
@@ -98,7 +98,7 @@ export default function LobbyPage() {
       getPool(t, p)
         .then((pool: any) => {
           if (pool.status === "CLOSED") {
-            sessionStorage.removeItem(STORAGE_KEY_POOL);
+            localStorage.removeItem(STORAGE_KEY_POOL);
             return;
           }
           const players: any[] = Array.isArray(pool.players) ? pool.players : [];
@@ -110,11 +110,11 @@ export default function LobbyPage() {
             return;
           }
           // Pool exists but user isn't in it — they can pick a different one
-          sessionStorage.removeItem(STORAGE_KEY_POOL);
+          localStorage.removeItem(STORAGE_KEY_POOL);
         })
         .catch(() => {
           // Stale pool — clear it and show lobby normally
-          sessionStorage.removeItem(STORAGE_KEY_POOL);
+          localStorage.removeItem(STORAGE_KEY_POOL);
         });
     }
 
@@ -136,7 +136,7 @@ export default function LobbyPage() {
 
   async function handleJoin(poolId: string) {
     setJoiningId(poolId);
-    sessionStorage.setItem(STORAGE_KEY_POOL, poolId);
+    localStorage.setItem(STORAGE_KEY_POOL, poolId);
     router.push("/fund");
   }
 
@@ -144,7 +144,7 @@ export default function LobbyPage() {
     setCreating(true);
     try {
       const { poolId } = await createRoom(token);
-      sessionStorage.setItem(STORAGE_KEY_POOL, poolId);
+      localStorage.setItem(STORAGE_KEY_POOL, poolId);
       router.push("/fund");
     } catch (e: any) {
       toast(e.message ?? "Failed to create room", "error");

@@ -33,9 +33,9 @@ function GamePageInner() {
       return;
     }
 
-    const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
-    const p = sessionStorage.getItem(STORAGE_KEY_POOL);
-    const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
+    const t = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const p = localStorage.getItem(STORAGE_KEY_POOL);
+    const w = localStorage.getItem(STORAGE_KEY_WALLET);
 
     // Without all three pieces there's nothing to verify
     if (!t || !p || !w) {
@@ -48,7 +48,7 @@ function GamePageInner() {
       .then((pool: any) => {
         if (pool.status === "CLOSED") {
           // Pool gone — clear stale state and fall back to demo
-          sessionStorage.removeItem(STORAGE_KEY_POOL);
+          localStorage.removeItem(STORAGE_KEY_POOL);
           setMode("demo");
           return;
         }

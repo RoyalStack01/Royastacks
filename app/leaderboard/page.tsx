@@ -35,8 +35,8 @@ export default function LeaderboardPage() {
   const [error, setError]     = useState("");
 
   useEffect(() => {
-    const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
-    const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
+    const t = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const w = localStorage.getItem(STORAGE_KEY_WALLET);
     if (!t || !w) { router.replace("/connect"); return; }
     setToken(t);
     setWallet(w);

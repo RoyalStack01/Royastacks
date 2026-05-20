@@ -41,8 +41,8 @@ export default function ProfilePage() {
   const [error, setError]     = useState("");
 
   useEffect(() => {
-    const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
-    const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
+    const t = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const w = localStorage.getItem(STORAGE_KEY_WALLET);
     if (!t || !w) { router.replace("/connect"); return; }
     setToken(t);
     setWallet(w);
@@ -66,9 +66,9 @@ export default function ProfilePage() {
   }
 
   function handleDisconnect() {
-    sessionStorage.removeItem(STORAGE_KEY_TOKEN);
-    sessionStorage.removeItem(STORAGE_KEY_WALLET);
-    sessionStorage.removeItem(STORAGE_KEY_POOL);
+    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_WALLET);
+    localStorage.removeItem(STORAGE_KEY_POOL);
     router.push("/");
   }
 

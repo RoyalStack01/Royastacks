@@ -55,9 +55,9 @@ export default function FundPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const w = sessionStorage.getItem(STORAGE_KEY_WALLET);
-    const t = sessionStorage.getItem(STORAGE_KEY_TOKEN);
-    const p = sessionStorage.getItem(STORAGE_KEY_POOL);
+    const w = localStorage.getItem(STORAGE_KEY_WALLET);
+    const t = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const p = localStorage.getItem(STORAGE_KEY_POOL);
     setWalletAddress(w);
     setSessionToken(t);
     setPoolId(p);
@@ -67,7 +67,7 @@ export default function FundPage() {
       getPool(t, p)
         .then((pool: any) => {
           if (pool.status === "CLOSED") {
-            sessionStorage.removeItem(STORAGE_KEY_POOL);
+            localStorage.removeItem(STORAGE_KEY_POOL);
             router.replace("/lobby");
             return;
           }
@@ -174,7 +174,7 @@ export default function FundPage() {
         const pool: any = await getPool(sessionToken, poolId);
         if (pool.status === "CLOSED") {
           clearInterval(pollRef.current!);
-          sessionStorage.removeItem(STORAGE_KEY_POOL);
+          localStorage.removeItem(STORAGE_KEY_POOL);
           toast("Pool was cancelled. Returning to lobby...", "error", 4000);
           setTimeout(() => router.replace("/lobby"), 4000);
         }
