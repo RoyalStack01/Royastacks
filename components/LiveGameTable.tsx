@@ -160,6 +160,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   const disconnectToastRef = useRef<number | null>(null);
   const gameStartedRef = useRef(false);
   const lastActivePlayerRef = useRef<string | null>(null);
+  const lastStageRef = useRef<string | null>(null);
 
   const addLog = (msg: string) => setLog((prev) => [...prev.slice(-4), msg]);
 
@@ -231,6 +232,14 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
         sounds.welcomeToGame();
       }
 
+      // Card deal sound — fires each time the stage advances (preflop/flop/turn/river)
+      if (state.stage && state.stage !== lastStageRef.current) {
+        lastStageRef.current = state.stage;
+        if (["preflop", "flop", "turn", "river"].includes(state.stage)) {
+          sounds.cardDeal();
+        }
+      }
+
       // Your-turn sound — fires each time the active seat becomes this player
       const activePlayer = state.currentPlayer?.toLowerCase() ?? null;
       if (activePlayer && activePlayer !== lastActivePlayerRef.current) {
@@ -281,6 +290,8 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
     if (amount !== undefined) payload.amount = amount;
     socket.emit("PLAYER_ACTION", { poolId, action: payload });
     addLog(`You: ${type}${amount ? ` $${amount}` : ""}`);
+    if (type === "fold") sounds.fold();
+    else if (type === "call" || type === "raise" || type === "bet") sounds.chipClink();
   }
 
   // ─── State derivations ─────────────────────────────────────────────────────

@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import RoyalStackLogo from "./RoyalStackLogo";
+import { sounds } from "../lib/sounds";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Suit = "spades" | "hearts" | "diamonds" | "clubs";
 type CardFace = { rank: string; suit: Suit };
+type BotStyle = "aggressive" | "calling" | "tight" | "passive";
+
 type Player = {
   id: number;
   name: string;
@@ -17,6 +20,7 @@ type Player = {
   isFolded: boolean;
   position: { x: number; y: number; anchor: string };
   lastAction?: string;
+  style?: BotStyle;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -56,6 +60,7 @@ const DEFAULT_PLAYERS: Player[] = [
   {
     id: 2,
     name: "Maverick",
+    style: "aggressive",
     chips: 7800,
     cards: [
       { rank: "10", suit: "clubs" },
@@ -70,6 +75,7 @@ const DEFAULT_PLAYERS: Player[] = [
   {
     id: 3,
     name: "Blaze",
+    style: "calling",
     chips: 3100,
     cards: [
       { rank: "Q", suit: "hearts" },
@@ -84,6 +90,7 @@ const DEFAULT_PLAYERS: Player[] = [
   {
     id: 4,
     name: "Viper",
+    style: "tight",
     chips: 9500,
     cards: [
       { rank: "7", suit: "diamonds" },
@@ -98,6 +105,7 @@ const DEFAULT_PLAYERS: Player[] = [
   {
     id: 5,
     name: "Storm",
+    style: "passive",
     chips: 5600,
     cards: [
       { rank: "2", suit: "hearts" },
@@ -173,6 +181,29 @@ const RANK_VALUE: Record<string, number> = {
   K: 13,
   A: 14,
 };
+
+// ─── Bot hand-strength heuristic (0 = trash, 1 = nuts) ──────────────────────
+function getHoleStrength(cards: [CardFace | null, CardFace | null]): number {
+  const [c1, c2] = cards;
+  if (!c1 || !c2) return 0.25;
+  const r1 = RANK_VALUE[c1.rank];
+  const r2 = RANK_VALUE[c2.rank];
+  const high = Math.max(r1, r2);
+  const low  = Math.min(r1, r2);
+  const isPair   = r1 === r2;
+  const isSuited = c1.suit === c2.suit;
+  const gap      = high - low;
+  let s: number;
+  if (isPair) {
+    s = 0.50 + ((high - 2) / 12) * 0.40;  // 22=0.50 … AA=0.90
+  } else {
+    s = ((high - 2) / 12) * 0.45 + ((low - 2) / 12) * 0.20;
+    if (isSuited) s += 0.08;
+    if (gap <= 1)      s += 0.06;
+    else if (gap <= 2) s += 0.03;
+  }
+  return Math.min(1, Math.max(0, s));
+}
 
 function createDeck(): CardFace[] {
   return SUITS.flatMap((suit) => RANKS.map((rank) => ({ rank, suit })));
@@ -957,6 +988,7 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
   };
 
   function dealNewHand() {
+    sounds.cardDeal();
     const freshDeck = shuffleCards(createDeck());
     const nextDealer = getNextActivePlayer(players, dealerId) ?? dealerId;
     const sbPlayerId = getNextActivePlayer(players, nextDealer) ?? nextDealer;
@@ -1061,6 +1093,7 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
     nextPhase: GamePhase,
     starterId: number | null,
   ) {
+    sounds.cardDeal();
     setPlayers(resetPlayerBets(updatedPlayers));
     setCommunityCards(nextCommunity);
     setCurrentBet(0);
@@ -1136,6 +1169,7 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
     let message = "";
 
     if (action === "fold") {
+      if (player.id === HUMAN_PLAYER_ID) sounds.fold();
       updatedPlayers.forEach((entry) => {
         if (entry.id === player.id) {
           entry.isFolded = true;
@@ -1144,6 +1178,7 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
       });
       message = `${player.name} folds.`;
     } else if (action === "call") {
+      sounds.chipClink();
       const amount = Math.min(callAmount, player.chips);
       updatedPlayers.forEach((entry) => {
         if (entry.id === player.id) {
@@ -1161,6 +1196,7 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
       });
       message = `${player.name} checks.`;
     } else if (action === "bet" || action === "raise") {
+      sounds.chipClink();
       const isBet = action === "bet";
       const defaultAmount = isBet
         ? Math.min(player.chips, BLINDS.big)
@@ -1217,30 +1253,54 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
       const player = players.find((entry) => entry.id === currentTurn);
       if (!player) return;
 
-      const toCall = Math.max(currentBet - player.bet, 0);
+      const toCall  = Math.max(currentBet - player.bet, 0);
       const canAgress = player.chips > toCall;
       let action: PlayerAction = "check";
 
+      // Hand strength (0–1) drives decisions — bots now play their cards
+      const strength = getHoleStrength(player.cards as [CardFace | null, CardFace | null]);
+      // Pot odds: minimum equity needed to break even on a call
+      const potOdds  = toCall > 0 ? toCall / (pot + toCall) : 0;
+
+      // Style multipliers
+      const style = player.style ?? "passive";
+      const { aggrMult, passiveMult } = {
+        aggressive: { aggrMult: 1.5, passiveMult: 0.5 },
+        calling:    { aggrMult: 0.6, passiveMult: 1.8 },
+        tight:      { aggrMult: 1.1, passiveMult: 0.7 },
+        passive:    { aggrMult: 0.8, passiveMult: 1.2 },
+      }[style];
+
+      // Equity estimate: hole strength + 0–15% noise
+      const equity = Math.min(1, strength + (Math.random() * 0.15));
+
       if (toCall > 0) {
+        const hasOdds = equity > potOdds * passiveMult;
+
         if (player.chips <= toCall) {
-          action = Math.random() < 0.45 ? "fold" : "call";
-        } else if (toCall > BLINDS.big * 3) {
-          action = Math.random() < 0.6 ? "fold" : "call";
-        } else if (canAgress && Math.random() < 0.25) {
+          // Facing a shove — need decent equity
+          action = equity > 0.38 * passiveMult ? "call" : "fold";
+        } else if (!hasOdds) {
+          action = "fold";
+        } else if (canAgress && equity > 0.62 * (1 / aggrMult) && Math.random() < 0.40 * aggrMult) {
+          // Strong hand with odds → re-raise
           action = "raise";
         } else {
           action = "call";
         }
-      } else if (canAgress && Math.random() < 0.2) {
-        // No bet yet on this street — use "bet"
-        action = currentBet === 0 ? "bet" : "raise";
+      } else {
+        // No bet to call — bet/check based on strength and aggression
+        const betThresh = (0.45 - strength * 0.30) / aggrMult; // strong hands bet more
+        if (canAgress && Math.random() > betThresh) {
+          action = currentBet === 0 ? "bet" : "raise";
+        }
       }
 
       handlePlayerAction(action);
     }, BOT_DELAY);
 
     return () => clearTimeout(timeout);
-  }, [currentTurn, phase, players, currentBet]);
+  }, [currentTurn, phase, players, currentBet, pot]);
 
   return (
     <div
