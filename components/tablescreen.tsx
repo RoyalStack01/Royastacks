@@ -957,9 +957,16 @@ export default function PokerTable({
   const [phaseTurnStarter, setPhaseTurnStarter] = useState<number | null>(null);
   const [raiseValue, setRaiseValue] = useState<number>(0);
   const [isRaising, setIsRaising] = useState(false);
+  const [isMuted, setIsMuted] = useState(sounds.isMuted());
   const [actionLog, setActionLog] = useState<string[]>([
     "Press DEAL to start a new hand.",
   ]);
+
+  const toggleMute = () => {
+    const next = !isMuted;
+    setIsMuted(next);
+    sounds.setMuted(next);
+  };
 
   const currentPlayer = currentTurn
     ? (players.find((player) => player.id === currentTurn) ?? null)
@@ -1915,6 +1922,26 @@ export default function PokerTable({
           >
             {label}
           </span>
+          <button
+            onClick={toggleMute}
+            style={{
+              background: isMuted
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: 999,
+              color: isMuted ? "#ffb3b3" : "#fff",
+              fontFamily: "Georgia, serif",
+              fontSize: 10,
+              letterSpacing: 1,
+              padding: "8px 12px",
+              cursor: "pointer",
+              backdropFilter: "blur(8px)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+            }}
+          >
+            {isMuted ? "🔇 Unmute" : "🔊 Mute"}
+          </button>
         </div>
       </div>
     </div>

@@ -290,9 +290,16 @@ export default function LiveGameTable({
   const [showWinner, setShowWinner] = useState(false);
   const [winnerAddr, setWinnerAddr] = useState<string>("");
   const [payoutStatus, setPayoutStatus] = useState<"pending" | "sent" | "">("");
+  const [isMuted, setIsMuted] = useState(sounds.isMuted());
   const [raiseValue, setRaiseValue] = useState(0);
   const [isRaising, setIsRaising] = useState(false);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
+
+  const toggleMute = () => {
+    const next = !isMuted;
+    setIsMuted(next);
+    sounds.setMuted(next);
+  };
   const joinedRef = useRef(false);
   const disconnectToastRef = useRef<number | null>(null);
   const gameStartedRef = useRef(false);
@@ -441,7 +448,7 @@ export default function LiveGameTable({
         .map((w) => `${w.walletAddress?.slice(0, 6)}… (+${w.amount})`)
         .join(", ");
       addLog(`Game over. Winner${winners.length > 1 ? "s" : ""}: ${names}`);
-      setPayoutStatus(payoutInitiated ? "sent" : "pending");
+      setPayoutStatus("pending");
       setShowWinner(true);
       setTimeout(() => {
         localStorage.removeItem("royalstack:poolId");
@@ -493,6 +500,7 @@ export default function LiveGameTable({
     return (
       <div
         style={{
+          position: "relative",
           width: "100%",
           minHeight: "calc(100vh - 48px)",
           background: BLACK,
@@ -504,6 +512,25 @@ export default function LiveGameTable({
           fontFamily: "Georgia, serif",
         }}
       >
+        <button
+          onClick={toggleMute}
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 50,
+            background: "rgba(255,255,255,0.1)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: 999,
+            color: "#fff",
+            fontSize: 12,
+            letterSpacing: 0.5,
+            padding: "8px 12px",
+            cursor: "pointer",
+          }}
+        >
+          {isMuted ? "🔇 Unmute" : "🔊 Mute"}
+        </button>
         <ToastContainer toasts={toasts} dismiss={dismiss} />
         <div style={{ fontSize: 48, marginBottom: 8 }}>
           {walletEmoji(walletAddress)}
@@ -668,6 +695,26 @@ export default function LiveGameTable({
         }}
       >
         {/* Table felt */}
+        <button
+          onClick={toggleMute}
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            zIndex: 220,
+            background: "rgba(255,255,255,0.08)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            borderRadius: 999,
+            color: "#fff",
+            fontSize: 11,
+            letterSpacing: 0.5,
+            padding: "8px 12px",
+            cursor: "pointer",
+            backdropFilter: "blur(10px)",
+          }}
+        >
+          {isMuted ? "🔇 Unmute" : "🔊 Mute"}
+        </button>
         <div
           style={{
             position: "absolute",
