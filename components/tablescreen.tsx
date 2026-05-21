@@ -33,7 +33,7 @@ function getPlayerPosition(index: number, total: number) {
   // Ellipse center (50,50), radii
   const rx = 38; // horizontal radius
   const ry = 32; // vertical radius
-  const angle = (2 * Math.PI * index) / total - Math.PI / 2;
+  const angle = (2 * Math.PI * index) / total + Math.PI / 2;
   const x = 50 + rx * Math.cos(angle);
   const y = 50 + ry * Math.sin(angle);
   let anchor = "center";
@@ -189,17 +189,17 @@ function getHoleStrength(cards: [CardFace | null, CardFace | null]): number {
   const r1 = RANK_VALUE[c1.rank];
   const r2 = RANK_VALUE[c2.rank];
   const high = Math.max(r1, r2);
-  const low  = Math.min(r1, r2);
-  const isPair   = r1 === r2;
+  const low = Math.min(r1, r2);
+  const isPair = r1 === r2;
   const isSuited = c1.suit === c2.suit;
-  const gap      = high - low;
+  const gap = high - low;
   let s: number;
   if (isPair) {
-    s = 0.50 + ((high - 2) / 12) * 0.40;  // 22=0.50 … AA=0.90
+    s = 0.5 + ((high - 2) / 12) * 0.4; // 22=0.50 … AA=0.90
   } else {
-    s = ((high - 2) / 12) * 0.45 + ((low - 2) / 12) * 0.20;
+    s = ((high - 2) / 12) * 0.45 + ((low - 2) / 12) * 0.2;
     if (isSuited) s += 0.08;
-    if (gap <= 1)      s += 0.06;
+    if (gap <= 1) s += 0.06;
     else if (gap <= 2) s += 0.03;
   }
   return Math.min(1, Math.max(0, s));
@@ -933,7 +933,12 @@ function Pot({ amount }: { amount: number }) {
 }
 
 // ─── Main Table ───────────────────────────────────────────────────────────────
-export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "Demo Table", speed = "normal" }: PokerTableProps) {
+export default function PokerTable({
+  smallBlind = 10,
+  bigBlind = 20,
+  label = "Demo Table",
+  speed = "normal",
+}: PokerTableProps) {
   const BLINDS = { small: smallBlind, big: bigBlind };
   const BOT_DELAY = speed === "fast" ? 400 : 900;
   const [winner, setWinner] = useState<Player | null>(null);
@@ -1152,10 +1157,7 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
     }
   }
 
-  function handlePlayerAction(
-    action: PlayerAction,
-    amount?: number,
-  ) {
+  function handlePlayerAction(action: PlayerAction, amount?: number) {
     if (phase === "roundEnd" || currentTurn === null) return;
 
     const player = players.find((entry) => entry.id === currentTurn);
@@ -1253,26 +1255,28 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
       const player = players.find((entry) => entry.id === currentTurn);
       if (!player) return;
 
-      const toCall  = Math.max(currentBet - player.bet, 0);
+      const toCall = Math.max(currentBet - player.bet, 0);
       const canAgress = player.chips > toCall;
       let action: PlayerAction = "check";
 
       // Hand strength (0–1) drives decisions — bots now play their cards
-      const strength = getHoleStrength(player.cards as [CardFace | null, CardFace | null]);
+      const strength = getHoleStrength(
+        player.cards as [CardFace | null, CardFace | null],
+      );
       // Pot odds: minimum equity needed to break even on a call
-      const potOdds  = toCall > 0 ? toCall / (pot + toCall) : 0;
+      const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
 
       // Style multipliers
       const style = player.style ?? "passive";
       const { aggrMult, passiveMult } = {
         aggressive: { aggrMult: 1.5, passiveMult: 0.5 },
-        calling:    { aggrMult: 0.6, passiveMult: 1.8 },
-        tight:      { aggrMult: 1.1, passiveMult: 0.7 },
-        passive:    { aggrMult: 0.8, passiveMult: 1.2 },
+        calling: { aggrMult: 0.6, passiveMult: 1.8 },
+        tight: { aggrMult: 1.1, passiveMult: 0.7 },
+        passive: { aggrMult: 0.8, passiveMult: 1.2 },
       }[style];
 
       // Equity estimate: hole strength + 0–15% noise
-      const equity = Math.min(1, strength + (Math.random() * 0.15));
+      const equity = Math.min(1, strength + Math.random() * 0.15);
 
       if (toCall > 0) {
         const hasOdds = equity > potOdds * passiveMult;
@@ -1282,7 +1286,11 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
           action = equity > 0.38 * passiveMult ? "call" : "fold";
         } else if (!hasOdds) {
           action = "fold";
-        } else if (canAgress && equity > 0.62 * (1 / aggrMult) && Math.random() < 0.40 * aggrMult) {
+        } else if (
+          canAgress &&
+          equity > 0.62 * (1 / aggrMult) &&
+          Math.random() < 0.4 * aggrMult
+        ) {
           // Strong hand with odds → re-raise
           action = "raise";
         } else {
@@ -1290,7 +1298,7 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
         }
       } else {
         // No bet to call — bet/check based on strength and aggression
-        const betThresh = (0.45 - strength * 0.30) / aggrMult; // strong hands bet more
+        const betThresh = (0.45 - strength * 0.3) / aggrMult; // strong hands bet more
         if (canAgress && Math.random() > betThresh) {
           action = currentBet === 0 ? "bet" : "raise";
         }
@@ -1644,8 +1652,13 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
             isRaising ? (
               (() => {
                 const isBetMode = currentBet === 0;
-                const sliderMin = isBetMode ? BLINDS.big : Math.max(BLINDS.big, callAmount + BLINDS.big);
-                const sliderMax = Math.max(sliderMin, Math.min(...activePlayers.map((p) => p.chips)));
+                const sliderMin = isBetMode
+                  ? BLINDS.big
+                  : Math.max(BLINDS.big, callAmount + BLINDS.big);
+                const sliderMax = Math.max(
+                  sliderMin,
+                  Math.min(...activePlayers.map((p) => p.chips)),
+                );
                 return (
                   <div
                     style={{
@@ -1660,8 +1673,17 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
                       border: "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
-                    <div style={{ color: WHITE, fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>
-                      {isBetMode ? `BET ${formatMoney(raiseValue)}` : `RAISE TO ${formatMoney(raiseValue)}`}
+                    <div
+                      style={{
+                        color: WHITE,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {isBetMode
+                        ? `BET ${formatMoney(raiseValue)}`
+                        : `RAISE TO ${formatMoney(raiseValue)}`}
                     </div>
                     <input
                       type="range"
@@ -1701,7 +1723,10 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
                           boxShadow: `0 0 14px ${CRIMSON}66`,
                         }}
                         onClick={() => {
-                          handlePlayerAction(isBetMode ? "bet" : "raise", raiseValue);
+                          handlePlayerAction(
+                            isBetMode ? "bet" : "raise",
+                            raiseValue,
+                          );
                           setIsRaising(false);
                         }}
                       >
@@ -1715,7 +1740,8 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
               <>
                 <button
                   style={{
-                    background: "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                    background:
+                      "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
                     border: "1px solid rgba(255,255,255,0.2)",
                     borderRadius: 8,
                     color: WHITE,
@@ -1734,7 +1760,8 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
                 </button>
                 <button
                   style={{
-                    background: "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
+                    background:
+                      "linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05))",
                     border: "1px solid rgba(255,255,255,0.2)",
                     borderRadius: 8,
                     color: WHITE,
@@ -1747,7 +1774,9 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
                     backdropFilter: "blur(8px)",
                     boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
                   }}
-                  onClick={() => handlePlayerAction(callAmount > 0 ? "call" : "check")}
+                  onClick={() =>
+                    handlePlayerAction(callAmount > 0 ? "call" : "check")
+                  }
                 >
                   {callAmount > 0 ? `CALL ${formatMoney(callAmount)}` : "CHECK"}
                 </button>
@@ -1768,7 +1797,9 @@ export default function PokerTable({ smallBlind = 10, bigBlind = 20, label = "De
                   }}
                   onClick={() => {
                     const isBetMode = currentBet === 0;
-                    const min = isBetMode ? BLINDS.big : Math.max(BLINDS.big, callAmount + BLINDS.big);
+                    const min = isBetMode
+                      ? BLINDS.big
+                      : Math.max(BLINDS.big, callAmount + BLINDS.big);
                     setRaiseValue(Math.min(min, currentPlayer?.chips ?? 0));
                     setIsRaising(true);
                   }}
