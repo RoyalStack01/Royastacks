@@ -981,12 +981,9 @@ export default function PokerTable({
         : `${currentPlayer?.name ?? "Waiting"} is acting...`;
 
   // Always show 5 community card slots, populated with actual dealt cards
-  const visibleCommunity =
-    phase === "roundEnd"
-      ? Array(5).fill(null)
-      : communityCards
-          .concat(Array(5 - communityCards.length).fill(null))
-          .slice(0, 5);
+  const visibleCommunity = communityCards
+    .concat(Array(5 - communityCards.length).fill(null))
+    .slice(0, 5);
 
   // For demo/UX: always reveal community cards once they're dealt
   const communityRevealed = visibleCommunity.map((card) => !!card);
@@ -1069,7 +1066,6 @@ export default function PokerTable({
     });
 
     setPlayers(updated);
-    setCommunityCards([]);
     setPhase("roundEnd");
     setCurrentTurn(null);
     if (winners.length === 1) {
