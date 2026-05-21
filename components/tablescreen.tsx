@@ -985,7 +985,7 @@ export default function PokerTable({
     .concat(Array(5 - communityCards.length).fill(null))
     .slice(0, 5);
 
-  // For demo/UX: always reveal community cards so they're always visible
+  // For demo/UX: always reveal community cards once they're dealt
   const communityRevealed = visibleCommunity.map((card) => !!card);
 
   const addLog = (entry: string) => {
