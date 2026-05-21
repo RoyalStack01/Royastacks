@@ -153,6 +153,7 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   const [log, setLog] = useState<string[]>([]);
   const [showWinner, setShowWinner] = useState(false);
   const [winnerAddr, setWinnerAddr] = useState<string>("");
+  const [payoutStatus, setPayoutStatus] = useState<"pending" | "sent" | "">("");
   const [raiseValue, setRaiseValue] = useState(0);
   const [isRaising, setIsRaising] = useState(false);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
@@ -258,11 +259,11 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
         const winner = state.winners[0];
         setWinnerAddr(winner.walletAddress);
         setShowWinner(true);
-        // Only play congratulations if this player is the winner
+        setPayoutStatus("pending");
         if (winner.walletAddress?.toLowerCase() === walletAddress.toLowerCase()) {
           sounds.congratulations();
         }
-        setTimeout(() => setShowWinner(false), 3500);
+        // Overlay stays visible until GAME_ENDED fires — no auto-hide here
       }
     });
 
@@ -272,14 +273,16 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
 
     socket.on("HAND_SAVED", () => addLog("Hand recorded."));
 
-    socket.on("GAME_ENDED", ({ winners }: { winners: any[] }) => {
+    socket.on("GAME_ENDED", ({ winners, payoutInitiated }: { winners: any[]; payoutInitiated?: boolean }) => {
       const names = winners.map(w => `${w.walletAddress?.slice(0, 6)}… (+${w.amount})`).join(", ");
       addLog(`Game over. Winner${winners.length > 1 ? "s" : ""}: ${names}`);
-      toast(`Game over! Returning to lobby...`, "info", 5000);
+      setPayoutStatus(payoutInitiated ? "sent" : "pending");
+      setShowWinner(true);
       setTimeout(() => {
         localStorage.removeItem("royalstack:poolId");
+        setShowWinner(false);
         router.push("/lobby");
-      }, 5000);
+      }, 4000);
     });
 
     return () => {
@@ -339,13 +342,23 @@ export default function LiveGameTable({ sessionToken, poolId, walletAddress }: P
   return (
     <div style={{ width: "100%", minHeight: "calc(100vh - 48px)", maxWidth: "100%", background: BLACK, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, 'Times New Roman', serif", overflow: "hidden" }}>
 
-      {/* Winner overlay */}
+      {/* Winner overlay — stays visible from showdown until lobby navigation */}
       {showWinner && (
-        <div style={{ position: "absolute", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.65)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-          <div style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028 80%)`, borderRadius: 24, padding: "48px 64px", boxShadow: `0 0 60px ${CRIMSON}cc, 0 2px 24px #000`, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, width: "100vw", height: "100vh", background: "rgba(0,0,0,0.72)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+          <div style={{ background: `linear-gradient(135deg, ${CRIMSON}, #9e0028 80%)`, borderRadius: 24, padding: "48px 64px", boxShadow: `0 0 60px ${CRIMSON}cc, 0 2px 24px #000`, display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
             <span style={{ fontSize: 28, color: WHITE, fontWeight: 900, letterSpacing: 2, textShadow: `0 0 18px #fff` }}>
-              🎉 {winnerAddr.toLowerCase() === myAddr ? "You Win!" : `${shortAddress(winnerAddr)} Wins!`} 🎉
+              {winnerAddr.toLowerCase() === myAddr ? "You Win!" : `${shortAddress(winnerAddr)} Wins!`}
             </span>
+            {payoutStatus === "pending" && (
+              <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", fontFamily: "monospace", letterSpacing: 1 }}>
+                Initiating payout…
+              </span>
+            )}
+            {payoutStatus === "sent" && (
+              <span style={{ fontSize: 13, color: "#9ceb9c", fontFamily: "monospace", letterSpacing: 1 }}>
+                ✓ Payout sent · Returning to lobby…
+              </span>
+            )}
           </div>
         </div>
       )}
