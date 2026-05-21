@@ -289,6 +289,7 @@ export default function LiveGameTable({
   const [log, setLog] = useState<string[]>([]);
   const [showWinner, setShowWinner] = useState(false);
   const [winnerAddr, setWinnerAddr] = useState<string>("");
+  const [payoutStatus, setPayoutStatus] = useState<"pending" | "sent" | "">("");
   const [raiseValue, setRaiseValue] = useState(0);
   const [isRaising, setIsRaising] = useState(false);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
@@ -425,7 +426,7 @@ export default function LiveGameTable({
         ) {
           sounds.congratulations();
         }
-        setTimeout(() => setShowWinner(false), 3500);
+        // Overlay stays visible until GAME_ENDED fires — no auto-hide here
       }
     });
 
@@ -440,11 +441,13 @@ export default function LiveGameTable({
         .map((w) => `${w.walletAddress?.slice(0, 6)}… (+${w.amount})`)
         .join(", ");
       addLog(`Game over. Winner${winners.length > 1 ? "s" : ""}: ${names}`);
-      toast(`Game over! Returning to lobby...`, "info", 5000);
+      setPayoutStatus(payoutInitiated ? "sent" : "pending");
+      setShowWinner(true);
       setTimeout(() => {
         localStorage.removeItem("royalstack:poolId");
+        setShowWinner(false);
         router.push("/lobby");
-      }, 5000);
+      }, 4000);
     });
 
     return () => {
@@ -616,6 +619,30 @@ export default function LiveGameTable({
                 : `${shortAddress(winnerAddr)} Wins!`}{" "}
               🎉
             </span>
+            {payoutStatus === "pending" && (
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.75)",
+                  fontFamily: "monospace",
+                  letterSpacing: 1,
+                }}
+              >
+                Initiating payout…
+              </span>
+            )}
+            {payoutStatus === "sent" && (
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "#9ceb9c",
+                  fontFamily: "monospace",
+                  letterSpacing: 1,
+                }}
+              >
+                ✓ Payout sent · Returning to lobby…
+              </span>
+            )}
           </div>
         </div>
       )}
