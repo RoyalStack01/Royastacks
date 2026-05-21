@@ -146,6 +146,17 @@ function CardBack({
         strokeWidth="2"
         strokeOpacity="0.8"
       />
+      {/* Use the app logo from /public/logo.png centered on the card back */}
+      <image
+        href="/logo.png"
+        xlinkHref="/logo.png"
+        x="9"
+        y="14"
+        width="20"
+        height="20"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ pointerEvents: "none" }}
+      />
     </svg>
   );
 }
